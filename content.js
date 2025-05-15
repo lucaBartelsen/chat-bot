@@ -1,228 +1,191 @@
-// Updated content.js specifically for FanFix's message structure
+// Verbesserte content.js, die Nachrichten nach IDs sortiert
 
-// Wait for the page to fully load
-window.addEventListener('load', initializeAssistant);
-document.addEventListener('DOMContentLoaded', initializeAssistant);
-
-// Set up variables
-let chatObserver;
+// Globale Variablen
 let suggestionPanel;
-let lastProcessedMessage = '';
+let lastProcessedMessageId = '';
 let waitingForSuggestion = false;
-let debugMode = true; // Set to true for detailed logging
+let checkIntervalId = null;
+let debugMode = true;
 
 function debug(message, obj = null) {
   if (!debugMode) return;
   
   if (obj) {
-    console.log(`%c[FanFix Assistant Debug] ${message}`, 'color: #4285f4', obj);
+    console.log(`%c[FanFix Assistant] ${message}`, 'color: #4285f4', obj);
   } else {
-    console.log(`%c[FanFix Assistant Debug] ${message}`, 'color: #4285f4');
+    console.log(`%c[FanFix Assistant] ${message}`, 'color: #4285f4');
   }
 }
 
-function initializeAssistant() {
+// Initialisierungsfunktion
+function initExtension() {
   debug('Initializing FanFix Chat Assistant');
   
-  // Check if we're on a chat page - FanFix specific
-  if (window.location.href.includes('fanfix.io') && 
-      (window.location.href.includes('/chat') || window.location.href.includes('/messages'))) {
-    debug('FanFix chat page detected, setting up assistant');
-    setupChatObserver();
-    createSuggestionPanel();
-  } else {
-    debug('Not on a FanFix chat page. URL:', window.location.href);
-  }
+  // Starte einen einfachen Timer
+  if (checkIntervalId) clearInterval(checkIntervalId);
   
-  // Listen for URL changes (for single-page applications)
-  let lastUrl = window.location.href;
-  new MutationObserver(() => {
-    if (lastUrl !== window.location.href) {
-      lastUrl = window.location.href;
-      debug('URL changed to:', window.location.href);
-      if (window.location.href.includes('fanfix.io') && 
-          (window.location.href.includes('/chat') || window.location.href.includes('/messages'))) {
-        debug('Navigated to FanFix chat page, setting up assistant');
-        setupChatObserver();
-        createSuggestionPanel();
-      }
-    }
-  }).observe(document, {subtree: true, childList: true});
-}
-
-function setupChatObserver() {
-  // Disconnect previous observer if exists
-  if (chatObserver) {
-    chatObserver.disconnect();
-    debug('Disconnected previous chat observer');
-  }
-  
-  // Find the FanFix chat container
-  const findChatContainer = () => {
-    debug('Looking for FanFix chat container');
+  // Wir prüfen alle 2 Sekunden auf neue Nachrichten
+  checkIntervalId = setInterval(() => {
+    // Prüfen, ob wir auf einer Chat-Seite sind
+    const isChatPage = window.location.href.includes('fanfix.io') && 
+                      (window.location.href.includes('/chat') || 
+                       window.location.href.includes('/messages'));
     
-    // Try to find the main container that holds all messages
-    // Based on the HTML you provided, we'll look for a container that has message elements
-    const container = document.querySelector('[data-testid="message-list-container-ms"]');
-    
-    if (container) {
-      debug('Found FanFix chat container:', container);
-      observeChatContainer(container);
+    if (isChatPage) {
+      // Versuche, die neueste Nachricht vom Fan zu finden
+      checkForNewMessages();
     } else {
-      // Broader fallback if the specific container isn't found
-      const fallbackContainer = document.querySelector('.MuiBox-root');
-      if (fallbackContainer) {
-        debug('Using fallback container:', fallbackContainer);
-        observeChatContainer(fallbackContainer);
-      } else {
-        // If container not found, retry after a short delay
-        debug('Chat container not found, will retry in 2 seconds');
-        setTimeout(findChatContainer, 2000);
-      }
+      // Wenn wir nicht auf einer Chat-Seite sind, verstecke das Panel
+      if (suggestionPanel) suggestionPanel.style.display = 'none';
     }
-  };
+  }, 2000);
   
-  findChatContainer();
+  // Erstelle das Panel einmal
+  createSuggestionPanel();
 }
 
-function observeChatContainer(container) {
-  debug('Setting up observer for FanFix chat container');
+// Extrahiert die numerische ID aus einer Nachrichten-ID
+function extractMessageId(message) {
+  // Die ID ist im Format "message-1029552743"
+  const idAttr = message.id || '';
+  const matches = idAttr.match(/message-(\d+)/);
   
-  chatObserver = new MutationObserver((mutations) => {
-    debug('Detected DOM mutations in chat container:', mutations);
-    let shouldProcess = false;
-    
-    for (const mutation of mutations) {
-      if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
-        debug('New nodes added to chat container');
-        shouldProcess = true;
-        break;
-      }
-    }
-    
-    if (shouldProcess) {
-      processNewMessages();
-    }
-  });
+  if (matches && matches[1]) {
+    return parseInt(matches[1], 10);
+  }
   
-  // Observe both direct changes and deeper changes
-  chatObserver.observe(container, { childList: true, subtree: true });
-  debug('Observer set up successfully for FanFix chat');
-  
-  // Process existing messages on first load
-  processNewMessages();
+  return 0; // Fallback, falls keine ID gefunden wird
 }
 
-function processNewMessages() {
-  debug('Processing FanFix messages');
+// Prüft auf neue Nachrichten, sortiert nach IDs
+function checkForNewMessages() {
+  // Wenn wir bereits auf eine Antwort warten, nicht erneut prüfen
+  if (waitingForSuggestion) return;
   
-  // Using the exact selectors from the HTML you provided
-  const messages = document.querySelectorAll('.mymessage, .othermessage');
-  debug('messages:', messages);
+  // Finde alle "othermessage" Elemente (Nachrichten von Fans)
+  const fanMessages = document.querySelectorAll('.othermessage');
   
-  if (messages.length === 0) {
-    debug('No FanFix messages found');
+  if (fanMessages.length === 0) {
+    debug('No fan messages found yet');
     return;
   }
   
-  debug(`Found ${messages.length} FanFix messages`);
+  // Konvertiere NodeList zu Array und sortiere nach IDs
+  const sortedFanMessages = Array.from(fanMessages)
+    .filter(msg => msg.id) // Nur Nachrichten mit IDs
+    .sort((a, b) => {
+      const idA = extractMessageId(a);
+      const idB = extractMessageId(b);
+      return idB - idA; // Absteigend sortieren (höchste zuerst)
+    });
   
-  // Get the last message from the fan (othermessage)
-  let latestUserMessage = null;
-  let latestUserMessageEl = null;
-  
-  for (let i = messages.length - 1; i >= 0; i--) {
-    const message = messages[i];
-    
-    // Check if this is a message from the fan (othermessage)
-    if (message.classList.contains('othermessage')) {
-      // Find the text content within this message - using the exact path from your HTML
-      const textElement = message.querySelector('[data-testid="message-thread-content-ds"] .interRegular14 div');
-      
-      if (textElement) {
-        latestUserMessageEl = message;
-        latestUserMessage = textElement.textContent.trim();
-        debug('Found latest fan message:', latestUserMessage);
-        break;
-      }
-    }
+  if (sortedFanMessages.length === 0) {
+    debug('No fan messages with valid IDs found');
+    return;
   }
   
-  if (latestUserMessage) {
-    if (latestUserMessage !== lastProcessedMessage && !waitingForSuggestion) {
-      lastProcessedMessage = latestUserMessage;
-      waitingForSuggestion = true;
-      updateSuggestionPanel('Thinking...');
-      
-      try {
-        // Get chat history for context
-        const chatHistory = getChatHistory(messages, 10);
-        debug('Chat history for context:', chatHistory);
-        
-        // Request suggestions from the background script
-        debug('Sending message to background script for suggestions');
-        chrome.runtime.sendMessage({
-          action: 'getSuggestions',
-          message: latestUserMessage,
-          chatHistory: chatHistory
-        }, (response) => {
-          debug('Received response from background script:', response);
-          
-          if (chrome.runtime.lastError) {
-            debug('Error from background script:', chrome.runtime.lastError);
-            updateSuggestionPanel('Error connecting to extension. Check console for details.');
-            waitingForSuggestion = false;
-            return;
-          }
-          
-          if (response && response.suggestions) {
-            displaySuggestions(response.suggestions);
-          } else if (response && response.error) {
-            updateSuggestionPanel(`Error: ${response.error}`);
-          } else {
-            updateSuggestionPanel('Error getting suggestions.');
-          }
-          waitingForSuggestion = false;
-        });
-      } catch (error) {
-        debug('Error processing message:', error);
-        updateSuggestionPanel('Error processing message. Check console for details.');
-        waitingForSuggestion = false;
-      }
-    }
-  } else {
-    debug('No fan messages found or could not extract text');
+  // Hole die Nachricht mit der höchsten ID (neueste)
+  const latestFanMessage = sortedFanMessages[0];
+  const messageId = extractMessageId(latestFanMessage);
+  
+  debug('Latest fan message ID:', messageId);
+  
+  // Versuche, den Text zu extrahieren
+  const textElement = latestFanMessage.querySelector('[data-testid="message-thread-content-ds"] .interRegular14 div');
+  
+  if (!textElement) {
+    debug('Text element not found in the latest fan message');
+    return;
+  }
+  
+  const messageText = textElement.textContent.trim();
+  
+  // Wenn es eine neue Nachricht ist (basierend auf ID), verarbeite sie
+  if (messageText && messageId.toString() !== lastProcessedMessageId) {
+    debug('New fan message detected:', messageText);
+    debug('Message ID:', messageId);
+    lastProcessedMessageId = messageId.toString();
+    processMessage(messageText, getRecentChatHistory());
   }
 }
 
-function getChatHistory(messages, maxMessages) {
-  const history = [];
-  const count = Math.min(messages.length, maxMessages);
+// Holt den aktuellen Chat-Verlauf, sortiert nach IDs
+function getRecentChatHistory() {
+  const chatHistory = [];
   
-  for (let i = messages.length - count; i < messages.length; i++) {
-    const message = messages[i];
-    const isFromYou = message.classList.contains('mymessage');
-    
-    // Extract text using the specific path from your HTML
+  // Finde alle Nachrichten
+  const allMessages = document.querySelectorAll('.mymessage, .othermessage');
+  
+  // Konvertiere zu Array und sortiere nach IDs
+  const sortedMessages = Array.from(allMessages)
+    .filter(msg => msg.id) // Nur Nachrichten mit IDs
+    .sort((a, b) => {
+      const idA = extractMessageId(a);
+      const idB = extractMessageId(b);
+      return idA - idB; // Aufsteigend sortieren für chronologische Reihenfolge
+    });
+  
+  // Nimm nur die letzten 10 Nachrichten
+  const recentMessages = sortedMessages.slice(-10);
+  
+  // Füge sie zum Chat-Verlauf hinzu
+  for (const message of recentMessages) {
+    const isCreator = message.classList.contains('mymessage');
     const textElement = message.querySelector('[data-testid="message-thread-content-ds"] .interRegular14 div');
-    const text = textElement ? textElement.textContent.trim() : '';
     
-    if (text) {
-      history.push({
-        role: isFromYou ? 'assistant' : 'user',
-        content: text
+    if (textElement) {
+      chatHistory.push({
+        role: isCreator ? 'assistant' : 'user',
+        content: textElement.textContent.trim()
       });
     }
   }
   
-  return history;
+  return chatHistory;
 }
 
-function createSuggestionPanel() {
-  // Remove existing panel if any
-  if (suggestionPanel) suggestionPanel.remove();
+// Verarbeitet eine Nachricht und holt Vorschläge
+function processMessage(message, chatHistory) {
+  debug('Processing message:', message);
+  debug('Chat history:', chatHistory);
   
-  // Create new suggestion panel
+  // Zeige, dass wir auf Vorschläge warten
+  waitingForSuggestion = true;
+  updateSuggestionPanel('Thinking...');
+  
+  // Hole Vorschläge vom Hintergrund-Skript
+  chrome.runtime.sendMessage({
+    action: 'getSuggestions',
+    message: message,
+    chatHistory: chatHistory
+  }, (response) => {
+    debug('Received response from background script:', response);
+    
+    if (chrome.runtime.lastError) {
+      debug('Error from background script:', chrome.runtime.lastError);
+      updateSuggestionPanel('Error: ' + chrome.runtime.lastError.message);
+      waitingForSuggestion = false;
+      return;
+    }
+    
+    if (response && response.suggestions) {
+      displaySuggestions(response.suggestions);
+    } else if (response && response.error) {
+      updateSuggestionPanel('Error: ' + response.error);
+    } else {
+      updateSuggestionPanel('Error getting suggestions');
+    }
+    
+    waitingForSuggestion = false;
+  });
+}
+
+// Erstellt das Suggestion-Panel
+function createSuggestionPanel() {
+  // Wenn das Panel bereits existiert, nichts tun
+  if (suggestionPanel) return;
+  
+  // Erstelle das Panel
   suggestionPanel = document.createElement('div');
   suggestionPanel.className = 'fanfix-suggestion-panel';
   suggestionPanel.innerHTML = `
@@ -231,37 +194,43 @@ function createSuggestionPanel() {
       <button class="close-btn">×</button>
     </div>
     <div class="suggestion-content">
-      <p class="waiting-message">Waiting for new messages from fans...</p>
+      <p class="waiting-message">Waiting for fan messages...</p>
     </div>
   `;
   
+  // Füge es zum Dokument hinzu
   document.body.appendChild(suggestionPanel);
-  debug('Suggestion panel created');
   
-  // Add event listener to close button
+  // Füge Event-Listener hinzu
   suggestionPanel.querySelector('.close-btn').addEventListener('click', () => {
     suggestionPanel.classList.toggle('minimized');
-    debug('Suggestion panel minimized/restored');
   });
+  
+  debug('Suggestion panel created');
 }
 
+// Aktualisiert das Suggestion-Panel
 function updateSuggestionPanel(message) {
   if (!suggestionPanel) createSuggestionPanel();
   
+  // Stelle sicher, dass das Panel sichtbar ist
+  suggestionPanel.style.display = 'block';
+  
   const content = suggestionPanel.querySelector('.suggestion-content');
   content.innerHTML = `<p class="waiting-message">${message}</p>`;
-  debug('Updated suggestion panel with message:', message);
 }
 
+// Zeigt Vorschläge im Panel an
 function displaySuggestions(suggestions) {
   if (!suggestionPanel) createSuggestionPanel();
+  
+  // Stelle sicher, dass das Panel sichtbar ist
+  suggestionPanel.style.display = 'block';
   
   const content = suggestionPanel.querySelector('.suggestion-content');
   content.innerHTML = '';
   
-  debug('Displaying suggestions:', suggestions);
-  
-  suggestions.forEach((suggestion, index) => {
+  suggestions.forEach((suggestion) => {
     const suggestionElement = document.createElement('div');
     suggestionElement.className = 'suggestion-item';
     suggestionElement.textContent = suggestion;
@@ -272,41 +241,44 @@ function displaySuggestions(suggestions) {
   });
 }
 
+// Fügt einen Vorschlag in das Eingabefeld ein
 function insertSuggestion(text) {
-  debug('Attempting to insert suggestion:', text);
-  
-  // FanFix specific selector for the chat input
-  const inputField = document.querySelector('[placeholder="Type your message here..."]');
+  // Finde das Eingabefeld
+  const inputField = document.querySelector('[placeholder="Write a message..."]');
   
   if (inputField) {
-    debug('Found FanFix input field:', inputField);
-    
-    // Set the input field value to the suggestion
+    // Setze den Wert des Eingabefelds
     inputField.value = text;
-    
-    // Focus the input field
     inputField.focus();
     
-    // Trigger input event to activate any listeners
+    // Trigger ein input-Event
     const inputEvent = new Event('input', { bubbles: true });
     inputField.dispatchEvent(inputEvent);
     
-    debug('Successfully inserted suggestion');
+    debug('Suggestion inserted into input field');
   } else {
-    debug('Could not find FanFix input field');
+    debug('Input field not found');
   }
 }
 
-// Listen for messages from the popup
+// Höre auf Nachrichten vom Popup
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  debug('Received message from popup:', request);
-  
   if (request.action === 'refresh') {
-    // Refresh the suggestion panel
-    lastProcessedMessage = '';
-    processNewMessages();
+    debug('Refresh requested from popup');
+    
+    // Erzwinge eine neue Prüfung
+    lastProcessedMessageId = '';
+    checkForNewMessages();
+    
     sendResponse({ status: 'refreshing' });
   }
   
   return true;
 });
+
+// Initialisiere die Extension, sobald das Dokument bereit ist
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initExtension);
+} else {
+  initExtension();
+}
