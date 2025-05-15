@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>FanFix Chat Assistant Options</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    h1 {
+      color: #333;
+      border-bottom: 1px solid #eee;
+      padding-bottom: 10px;
+    }
+    .form-group {
+      margin-bottom: 20px;
+    }
+    label {
+      display: block;
+      margin-bottom: 5px;
+      font-weight: bold;
+    }
+    input, select {
+      width: 100%;
+      padding: 8px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      box-sizing: border-box;
+    }
+    button {
+      padding: 10px 15px;
+      background-color: #4285f4;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #3367d6;
+    }
+    .status {
+      margin-top: 15px;
+      padding: 10px;
+      border-radius: 4px;
+    }
+    .success {
+      background-color: #e6f4ea;
+      color: #137333;
+    }
+    .error {
+      background-color: #fce8e6;
+      color: #c5221f;
+    }
+    .instructions {
+      background-color: #f8f9fa;
+      padding: 15px;
+      border-radius: 4px;
+      margin-top: 20px;
+    }
+    .instructions h2 {
+      margin-top: 0;
+      font-size: 16px;
+    }
+    .instructions ol {
+      padding-left: 20px;
+    }
+  </style>
+</head>
+<body>
+  <h1>FanFix Chat Assistant Options</h1>
+  
+  <div class="form-group">
+    <label for="apiKey">OpenAI API Key:</label>
+    <input type="password" id="apiKey" placeholder="sk-...">
+  </div>
+  
+  <div class="form-group">
+    <label for="modelName">Model Name:</label>
+    <select id="modelName">
+      <option value="gpt-3.5-turbo">GPT-3.5-Turbo</option>
+      <option value="gpt-4">GPT-4</option>
+      <option value="gpt-4-turbo">GPT-4-Turbo</option>
+      <!-- Add custom fine-tuned models here -->
+    </select>
+  </div>
+  
+  <button id="saveBtn">Save Settings</button>
+  
+  <div id="status" class="status" style="display: none;"></div>
+  
+  <div class="instructions">
+    <h2>How to get an OpenAI API Key:</h2>
+    <ol>
+      <li>Sign up or log in at <a href="https://platform.openai.com" target="_blank">OpenAI's platform</a></li>
+      <li>Go to the API Keys section in your account</li>
+      <li>Create a new secret key</li>
+      <li>Copy and paste it here</li>
+      <li>Note: Using the OpenAI API will incur costs based on your usage</li>
+    </ol>
+    
+    <h2>How to use a fine-tuned model:</h2>
+    <ol>
+      <li>Fine-tune a model on OpenAI's platform</li>
+      <li>Once fine-tuning is complete, get your model's name</li>
+      <li>Add the model name to the dropdown list above</li>
+    </ol>
+  </div>
+  
+  <script src="options.js"></script>
+</body>
+</html>

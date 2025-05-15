@@ -1,0 +1,61 @@
+/* styles.css - Styling for the suggestion panel */
+
+.fanfix-suggestion-panel {
+  position: fixed;
+  bottom: 80px;
+  right: 20px;
+  width: 300px;
+  max-height: 400px;
+  background-color: white;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 9999;
+  overflow: hidden;
+  transition: height 0.3s ease;
+}
+
+.fanfix-suggestion-panel.minimized {
+  height: 40px;
+}
+
+.suggestion-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 15px;
+  background-color: #f0f0f0;
+  border-bottom: 1px solid #ddd;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  font-size: 20px;
+  cursor: pointer;
+  color: #555;
+}
+
+.suggestion-content {
+  padding: 10px 15px;
+  max-height: 340px;
+  overflow-y: auto;
+}
+
+.waiting-message {
+  color: #888;
+  text-align: center;
+  padding: 20px 0;
+}
+
+.suggestion-item {
+  padding: 10px;
+  border-radius: 4px;
+  background-color: #f9f9f9;
+  margin-bottom: 8px;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.suggestion-item:hover {
+  background-color: #eaf6ff;
+}
