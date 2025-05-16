@@ -66,6 +66,11 @@
     .instructions ol {
       padding-left: 20px;
     }
+    .btn-row {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
   </style>
 </head>
 <body>
@@ -77,16 +82,14 @@
   </div>
   
   <div class="form-group">
-    <label for="modelName">Model Name:</label>
-    <select id="modelName">
-      <option value="gpt-3.5-turbo">GPT-3.5-Turbo</option>
-      <option value="gpt-4">GPT-4</option>
-      <option value="gpt-4-turbo">GPT-4-Turbo</option>
-      <!-- Add custom fine-tuned models here -->
-    </select>
+    <label for="assistantId">Assistant ID:</label>
+    <input type="text" id="assistantId" placeholder="asst_...">
   </div>
   
-  <button id="saveBtn">Save Settings</button>
+  <div class="btn-row">
+    <button id="saveBtn">Save Settings</button>
+    <button id="createAssistantBtn">Create New Assistant</button>
+  </div>
   
   <div id="status" class="status" style="display: none;"></div>
   
@@ -100,11 +103,12 @@
       <li>Note: Using the OpenAI API will incur costs based on your usage</li>
     </ol>
     
-    <h2>How to use a fine-tuned model:</h2>
+    <h2>How to use OpenAI Assistants:</h2>
     <ol>
-      <li>Fine-tune a model on OpenAI's platform</li>
-      <li>Once fine-tuning is complete, get your model's name</li>
-      <li>Add the model name to the dropdown list above</li>
+      <li>You can create a new Assistant using the "Create New Assistant" button above</li>
+      <li>Or you can create an Assistant manually in the <a href="https://platform.openai.com/assistants" target="_blank">OpenAI Assistants interface</a></li>
+      <li>Copy your Assistant ID (starting with "asst_") and paste it above</li>
+      <li>The Assistant should be designed to suggest engaging replies for FanFix conversations</li>
     </ol>
   </div>
   

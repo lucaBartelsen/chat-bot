@@ -1,4 +1,4 @@
-// Improved background.js with debugging
+// Improved background.js with Assistant API integration
 
 // Enable debugging
 const debugMode = true;
@@ -21,7 +21,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     debug('Getting suggestions for message:', request.message);
     debug('Chat history:', request.chatHistory);
     
-    getSuggestionsFromOpenAI(request.message, request.chatHistory)
+    getSuggestionsFromAssistant(request.message, request.chatHistory)
       .then(suggestions => {
         debug('Got suggestions:', suggestions);
         sendResponse({ suggestions });
@@ -36,77 +36,247 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
 });
 
-async function getSuggestionsFromOpenAI(message, chatHistory) {
-  debug('Fetching suggestions from OpenAI');
-  // Get API key from storage
-  const data = await chrome.storage.sync.get(['openaiApiKey', 'modelName']);
-  const apiKey = data.openaiApiKey;
-  const modelName = data.modelName || 'gpt-3.5-turbo';
+async function getSuggestionsFromAssistant(message, chatHistory) {
+  debug('Fetching suggestions from OpenAI Assistant');
   
-  debug('Using model:', modelName);
+  // Get API key and assistant ID from storage
+  const data = await chrome.storage.sync.get(['openaiApiKey', 'assistantId']);
+  const apiKey = data.openaiApiKey;
+  const assistantId = data.assistantId;
+  
+  debug('Using Assistant ID:', assistantId);
   
   if (!apiKey) {
     debug('API key not set');
     throw new Error('OpenAI API key not set. Please go to extension options to set it.');
   }
   
+  if (!assistantId) {
+    debug('Assistant ID not set');
+    throw new Error('OpenAI Assistant ID not set. Please go to extension options to set it.');
+  }
+  
   try {
-    // Prepare the messages for OpenAI API
-    const messages = [
-      {
-        role: 'system',
-        content: 'You are a helpful assistant that generates engaging and personalized responses for FanFix chats. Create 3 different suggested responses that are authentic, conversational, and likely to keep the conversation going. Make the responses varied in tone and length.'
-      }
-    ];
-    
-    // Add chat history for context
-    if (chatHistory && chatHistory.length > 0) {
-      messages.push(...chatHistory);
-    }
-    
-    // Add the latest message to respond to
-    messages.push({
-      role: 'user',
-      content: `Please suggest 3 different responses to this message: "${message}"`
-    });
-    
-    debug('Sending request to OpenAI with messages:', messages);
-    
-    // Make API request
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    // Step 1: Create a new thread
+    debug('Creating new thread');
+    const threadResponse = await fetch('https://api.openai.com/v1/threads', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
+        'Authorization': `Bearer ${apiKey}`,
+        'OpenAI-Beta': 'assistants=v2'
+      },
+      body: JSON.stringify({})
+    });
+    
+    if (!threadResponse.ok) {
+      const errorData = await threadResponse.json();
+      debug('Thread creation error:', errorData);
+      throw new Error(errorData.error?.message || `Error creating thread: ${threadResponse.status}`);
+    }
+    
+    const threadData = await threadResponse.json();
+    const threadId = threadData.id;
+    debug('Thread created with ID:', threadId);
+    
+    // Step 2: Add chat history and the current message to the thread
+    if (chatHistory && chatHistory.length > 0) {
+      debug('Adding chat history to thread');
+      // Add each message from the chat history to the thread
+      for (const historyMessage of chatHistory) {
+        await fetch(`https://api.openai.com/v1/threads/${threadId}/messages`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`,
+            'OpenAI-Beta': 'assistants=v2'
+          },
+          body: JSON.stringify({
+            role: historyMessage.role,
+            content: historyMessage.content
+          })
+        });
+      }
+    }
+    
+    // Step 3: Add the latest message with instruction to generate 3 responses
+    debug('Adding current message to thread');
+    await fetch(`https://api.openai.com/v1/threads/${threadId}/messages`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+        'OpenAI-Beta': 'assistants=v2'
       },
       body: JSON.stringify({
-        model: modelName,
-        messages: messages,
-        temperature: 0.7,
-        max_tokens: 300
+        role: 'user',
+        content: `Please suggest 3 different responses to this message: "${message}". Make the responses varied in tone and length. Return your suggestions in JSON format as an array of objects, with each object having a "suggestion" property containing the text.`
       })
     });
     
-    const responseStatus = response.status;
-    debug('Response status:', responseStatus);
+    // Step 4: Run the Assistant on the thread
+    debug('Running assistant on thread');
+    const runResponse = await fetch(`https://api.openai.com/v1/threads/${threadId}/runs`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+        'OpenAI-Beta': 'assistants=v2'
+      },
+      body: JSON.stringify({
+        assistant_id: assistantId
+      })
+    });
     
-    if (!response.ok) {
-      const errorData = await response.json();
-      debug('API error response:', errorData);
-      throw new Error(errorData.error?.message || `Error calling OpenAI API: ${responseStatus}`);
+    if (!runResponse.ok) {
+      const errorData = await runResponse.json();
+      debug('Run creation error:', errorData);
+      throw new Error(errorData.error?.message || `Error running assistant: ${runResponse.status}`);
     }
     
-    const data = await response.json();
-    debug('API response data:', data);
+    const runData = await runResponse.json();
+    const runId = runData.id;
+    debug('Run created with ID:', runId);
     
-    // Parse the suggestions from the response
-    // This assumes the model returns numbered suggestions like "1. ..." and "2. ..."
-    const content = data.choices[0].message.content;
-    const suggestions = parseResponses(content);
+    // Step 5: Poll for the run to complete
+    let runStatus = 'queued';
+    let attempts = 0;
+    const maxAttempts = 30; // Maximum number of polling attempts
     
+    while (runStatus !== 'completed' && runStatus !== 'failed' && attempts < maxAttempts) {
+      attempts++;
+      await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second between polls
+      
+      const statusResponse = await fetch(`https://api.openai.com/v1/threads/${threadId}/runs/${runId}`, {
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'OpenAI-Beta': 'assistants=v2'
+        }
+      });
+      
+      if (!statusResponse.ok) {
+        const errorData = await statusResponse.json();
+        debug('Status check error:', errorData);
+        throw new Error(errorData.error?.message || `Error checking run status: ${statusResponse.status}`);
+      }
+      
+      const statusData = await statusResponse.json();
+      runStatus = statusData.status;
+      debug(`Run status (attempt ${attempts}):`, runStatus);
+      
+      if (runStatus === 'failed') {
+        debug('Run failed:', statusData);
+        throw new Error(`Assistant run failed: ${statusData.last_error?.message || 'Unknown error'}`);
+      }
+    }
+    
+    if (attempts >= maxAttempts) {
+      throw new Error('Timed out waiting for assistant to complete');
+    }
+    
+    // Step 6: Retrieve the messages (the last message will be the assistant's response)
+    debug('Retrieving messages from thread');
+    const messagesResponse = await fetch(`https://api.openai.com/v1/threads/${threadId}/messages`, {
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'OpenAI-Beta': 'assistants=v2'
+      }
+    });
+    
+    if (!messagesResponse.ok) {
+      const errorData = await messagesResponse.json();
+      debug('Messages retrieval error:', errorData);
+      throw new Error(errorData.error?.message || `Error retrieving messages: ${messagesResponse.status}`);
+    }
+    
+    const messagesData = await messagesResponse.json();
+    debug('Retrieved messages:', messagesData);
+    
+    // The first message in the list should be the assistant's response
+    const assistantMessages = messagesData.data.filter(msg => msg.role === 'assistant');
+    
+    if (assistantMessages.length === 0) {
+      throw new Error('No assistant response found');
+    }
+    
+    const assistantResponse = assistantMessages[0];
+    
+    // Parse the content from the assistant's response
+    let responseContent = '';
+    let suggestions = [];
+    
+    if (assistantResponse.content && assistantResponse.content.length > 0) {
+      // In v2, content is an array of content blocks, typically with type = "text"
+      responseContent = assistantResponse.content
+        .filter(item => item.type === 'text')
+        .map(item => item.text.value)
+        .join('\n');
+      
+      debug('Assistant response content:', responseContent);
+      
+      // Try to parse as JSON
+      try {
+        const jsonData = JSON.parse(responseContent);
+        
+        // Check if it's an array of suggestions
+        if (Array.isArray(jsonData)) {
+          suggestions = jsonData.map(item => {
+            // Handle different possible formats
+            if (typeof item === 'string') {
+              return item;
+            } else if (item.suggestion) {
+              return item.suggestion;
+            } else if (item.text) {
+              return item.text;
+            } else if (item.content) {
+              return item.content;
+            } else if (item.message) {
+              return item.message;
+            } else {
+              // If we can't find a clear field, stringify the object
+              return JSON.stringify(item);
+            }
+          });
+        } 
+        // Check if it has a suggestions array property
+        else if (jsonData.suggestions && Array.isArray(jsonData.suggestions)) {
+          suggestions = jsonData.suggestions.map(item => {
+            if (typeof item === 'string') {
+              return item;
+            } else if (item.suggestion || item.text || item.content || item.message) {
+              return item.suggestion || item.text || item.content || item.message;
+            } else {
+              return JSON.stringify(item);
+            }
+          });
+        }
+        // Check for other common formats
+        else if (jsonData.responses && Array.isArray(jsonData.responses)) {
+          suggestions = jsonData.responses;
+        } else if (jsonData.messages && Array.isArray(jsonData.messages)) {
+          suggestions = jsonData.messages;
+        } else {
+          // As a last resort, try to extract properties from the object
+          suggestions = Object.values(jsonData)
+            .filter(val => typeof val === 'string')
+            .slice(0, 3);
+        }
+      } catch (error) {
+        debug('Error parsing JSON response:', error);
+        // Fall back to text parsing if JSON parsing fails
+        suggestions = parseResponses(responseContent);
+      }
+    }
+    
+    // If we still don't have suggestions, fall back to the original parsing method
+    if (suggestions.length === 0) {
+      suggestions = parseResponses(responseContent);
+    }
+    
+    debug('Final parsed suggestions:', suggestions);
     return suggestions;
   } catch (error) {
-    debug('OpenAI API error:', error);
+    debug('OpenAI Assistant API error:', error);
     throw error;
   }
 }
