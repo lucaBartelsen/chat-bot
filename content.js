@@ -10,10 +10,15 @@ let debugMode = true;
 function debug(message, obj = null) {
   if (!debugMode) return;
   
+  // Create timestamp in format HH:MM:SS.mmm
+  const now = new Date();
+  const timestamp = now.toTimeString().split(' ')[0] + '.' + 
+                    String(now.getMilliseconds()).padStart(3, '0');
+  
   if (obj) {
-    console.log(`%c[FanFix Assistant] ${message}`, 'color: #4285f4', obj);
+    console.log(`%c[${timestamp}][FanFix Assistant] ${message}`, 'color: #4285f4', obj);
   } else {
-    console.log(`%c[FanFix Assistant] ${message}`, 'color: #4285f4');
+    console.log(`%c[${timestamp}][FanFix Assistant] ${message}`, 'color: #4285f4');
   }
 }
 
