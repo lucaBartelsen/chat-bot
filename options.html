@@ -40,9 +40,16 @@
       border: none;
       border-radius: 4px;
       cursor: pointer;
+      margin-right: 8px;
+      margin-bottom: 8px;
     }
     button:hover {
       background-color: #3367d6;
+    }
+    .button-group {
+      display: flex;
+      flex-wrap: wrap;
+      margin-top: 10px;
     }
     .status {
       margin-top: 15px;
@@ -69,6 +76,42 @@
     }
     .instructions ol {
       padding-left: 20px;
+    }
+    .debug-section {
+      margin-top: 30px;
+      padding: 15px;
+      background-color: #f0f0f0;
+      border-radius: 4px;
+      border-left: 4px solid #4285f4;
+    }
+    .debug-section h2 {
+      margin-top: 0;
+      color: #4285f4;
+    }
+    .stats {
+      margin: 10px 0;
+      font-family: monospace;
+    }
+    .import-container {
+      margin-top: 15px;
+      padding-top: 15px;
+      border-top: 1px solid #ddd;
+    }
+    .hidden {
+      display: none;
+    }
+    .progress-bar {
+      height: 20px;
+      background-color: #e0e0e0;
+      border-radius: 3px;
+      margin-top: 10px;
+      overflow: hidden;
+    }
+    .progress-bar-fill {
+      height: 100%;
+      background-color: #4285f4;
+      width: 0%;
+      transition: width 0.3s ease;
     }
   </style>
 </head>
@@ -119,6 +162,34 @@
       <li>Include details like tone (casual/formal), typical sentence length, emoji usage, etc.</li>
       <li>Example: "I write casually with lots of emojis 😊. I tend to use short sentences and ask questions to engage fans. I always use proper grammar but avoid overly formal language."</li>
     </ol>
+  </div>
+  
+  <!-- New: Debug Section for RAG System with Import/Export -->
+  <div class="debug-section">
+    <h2>Vector Embedding System</h2>
+    <p>This extension uses AI embeddings to find similar past conversations and improve suggestions.</p>
+    
+    <div class="stats" id="embeddingStats">
+      Loading stored conversation stats...
+    </div>
+    
+    <div class="button-group">
+      <button id="clearStoredConversationsBtn">Clear Stored Conversations</button>
+      <button id="exportConversationsBtn">Export Conversations</button>
+      <button id="importConversationsBtn">Import Conversations</button>
+    </div>
+    
+    <!-- Hidden file input for import -->
+    <input type="file" id="importFileInput" accept=".json" class="hidden">
+    
+    <!-- Import progress container -->
+    <div id="importProgressContainer" class="import-container hidden">
+      <h3>Importing Conversations</h3>
+      <div id="importStatus">Preparing to import...</div>
+      <div class="progress-bar">
+        <div id="importProgressBar" class="progress-bar-fill"></div>
+      </div>
+    </div>
   </div>
   
   <script src="options.js"></script>
