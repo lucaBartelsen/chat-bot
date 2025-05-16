@@ -1,11 +1,12 @@
 document.addEventListener('DOMContentLoaded', function() {
   const apiKeyInput = document.getElementById('apiKey');
   const modelNameSelect = document.getElementById('modelName');
+  const writingStyleTextarea = document.getElementById('writingStyle');
   const saveBtn = document.getElementById('saveBtn');
   const statusEl = document.getElementById('status');
   
   // Load saved settings
-  chrome.storage.sync.get(['openaiApiKey', 'modelName'], function(data) {
+  chrome.storage.sync.get(['openaiApiKey', 'modelName', 'writingStyle'], function(data) {
     if (data.openaiApiKey) {
       apiKeyInput.value = data.openaiApiKey;
     }
@@ -22,12 +23,18 @@ document.addEventListener('DOMContentLoaded', function() {
         modelNameSelect.value = data.modelName;
       }
     }
+    
+    // Load writing style
+    if (data.writingStyle) {
+      writingStyleTextarea.value = data.writingStyle;
+    }
   });
   
   // Save settings when the button is clicked
   saveBtn.addEventListener('click', function() {
     const apiKey = apiKeyInput.value.trim();
     const modelName = modelNameSelect.value;
+    const writingStyle = writingStyleTextarea.value.trim();
     
     // Validate API key format
     if (!apiKey || !apiKey.startsWith('sk-')) {
@@ -38,7 +45,8 @@ document.addEventListener('DOMContentLoaded', function() {
     // Save settings
     chrome.storage.sync.set({
       openaiApiKey: apiKey,
-      modelName: modelName
+      modelName: modelName,
+      writingStyle: writingStyle
     }, function() {
       showStatus('Settings saved successfully!', 'success');
     });

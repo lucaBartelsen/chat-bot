@@ -22,12 +22,16 @@
       margin-bottom: 5px;
       font-weight: bold;
     }
-    input, select {
+    input, select, textarea {
       width: 100%;
       padding: 8px;
       border: 1px solid #ddd;
       border-radius: 4px;
       box-sizing: border-box;
+    }
+    textarea {
+      min-height: 100px;
+      resize: vertical;
     }
     button {
       padding: 10px 15px;
@@ -82,8 +86,17 @@
       <option value="gpt-3.5-turbo">GPT-3.5-Turbo</option>
       <option value="gpt-4">GPT-4</option>
       <option value="gpt-4-turbo">GPT-4-Turbo</option>
+      <option value="gpt-4.1-nano">GPT-4.1-Nano</option>
       <!-- Add custom fine-tuned models here -->
     </select>
+  </div>
+  
+  <div class="form-group">
+    <label for="writingStyle">Your Writing Style:</label>
+    <textarea id="writingStyle" placeholder="Describe your writing style here. For example: 'Friendly and casual, with occasional emojis. I use short sentences and avoid formal language.'"></textarea>
+    <div style="font-size: 12px; color: #666; margin-top: 5px;">
+      This helps the AI match your personal writing style in the suggested responses.
+    </div>
   </div>
   
   <button id="saveBtn">Save Settings</button>
@@ -100,11 +113,11 @@
       <li>Note: Using the OpenAI API will incur costs based on your usage</li>
     </ol>
     
-    <h2>How to use a fine-tuned model:</h2>
+    <h2>How to define your writing style:</h2>
     <ol>
-      <li>Fine-tune a model on OpenAI's platform</li>
-      <li>Once fine-tuning is complete, get your model's name</li>
-      <li>Add the model name to the dropdown list above</li>
+      <li>In the "Your Writing Style" field, describe how you typically write</li>
+      <li>Include details like tone (casual/formal), typical sentence length, emoji usage, etc.</li>
+      <li>Example: "I write casually with lots of emojis 😊. I tend to use short sentences and ask questions to engage fans. I always use proper grammar but avoid overly formal language."</li>
     </ol>
   </div>
   

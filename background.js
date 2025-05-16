@@ -1,4 +1,4 @@
-// Improved background.js with debugging
+// Improved background.js with writing style customization
 
 // Enable debugging
 const debugMode = true;
@@ -38,12 +38,19 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
 async function getSuggestionsFromOpenAI(message, chatHistory) {
   debug('Fetching suggestions from OpenAI');
-  // Get API key from storage
-  const data = await chrome.storage.sync.get(['openaiApiKey', 'modelName']);
+  // Get API key and settings from storage
+  const data = await chrome.storage.sync.get([
+    'openaiApiKey', 
+    'modelName',
+    'writingStyle'  // New: get writing style preference
+  ]);
+  
   const apiKey = data.openaiApiKey;
   const modelName = data.modelName || 'gpt-3.5-turbo';
+  const writingStyle = data.writingStyle || ''; // Default to empty if not set
   
   debug('Using model:', modelName);
+  debug('Writing style configured:', writingStyle ? 'Yes' : 'No');
   
   if (!apiKey) {
     debug('API key not set');
@@ -51,11 +58,20 @@ async function getSuggestionsFromOpenAI(message, chatHistory) {
   }
   
   try {
+    // Create base system prompt
+    let systemPrompt = 'You are a helpful assistant that generates engaging and personalized responses for FanFix chats. Create 3 different suggested responses that are authentic, conversational, and likely to keep the conversation going. Make the responses varied in tone and length.';
+    
+    // Add writing style instructions if available
+    if (writingStyle && writingStyle.trim()) {
+      systemPrompt += `\n\nIMPORTANT: Use the following writing style for all responses: ${writingStyle}`;
+      debug('Added writing style to prompt');
+    }
+    
     // Prepare the messages for OpenAI API
     const messages = [
       {
         role: 'system',
-        content: 'You are a helpful assistant that generates engaging and personalized responses for FanFix chats. Create 3 different suggested responses that are authentic, conversational, and likely to keep the conversation going. Make the responses varied in tone and length.'
+        content: systemPrompt
       }
     ];
     
@@ -100,7 +116,6 @@ async function getSuggestionsFromOpenAI(message, chatHistory) {
     debug('API response data:', data);
     
     // Parse the suggestions from the response
-    // This assumes the model returns numbered suggestions like "1. ..." and "2. ..."
     const content = data.choices[0].message.content;
     const suggestions = parseResponses(content);
     
