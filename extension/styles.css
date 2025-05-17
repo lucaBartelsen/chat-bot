@@ -65,7 +65,7 @@
 }
 
 .suggestion-item:hover {
-  background-color: #eaf6ff;
+  background-color: #e0e0e0;
 }
 
 .header-buttons {
@@ -100,7 +100,7 @@
 
 .progress-bar {
   height: 100%;
-  background-color: #4285f4;
+  background-color: #d2b3e2;
   width: 0%;
   transition: width 0.3s ease;
 }
@@ -123,7 +123,7 @@
 .dot {
   width: 8px;
   height: 8px;
-  background-color: #4285f4;
+  background-color: #d2b3e2;
   border-radius: 50%;
   margin: 0 4px;
   animation: pulse 1.5s infinite ease-in-out;
@@ -150,7 +150,7 @@
 
 @keyframes pulse-width {
   0% { width: 5%; background-color: #e0e0e0; }
-  50% { width: 15%; background-color: #4285f4; }
+  50% { width: 15%; background-color: #d2b3e2; }
   100% { width: 5%; background-color: #e0e0e0; }
 }
 
@@ -165,8 +165,8 @@
 
 /* Multi-message suggestion styles */
 .multi-message {
-  background-color: #f5f8ff !important;
-  border-left: 3px solid #4285f4;
+  background-color: #f9f9f9 !important;
+  border-left: 3px solid #d2b3e2;
 }
 
 .messages-container {
@@ -194,13 +194,13 @@
   content: "↪";
   position: absolute;
   left: 0;
-  color: #4285f4;
+  color: #d2b3e2;
 }
 
 .multi-indicator {
   margin-top: 8px;
   font-size: 11px;
-  color: #4285f4;
+  color: #d2b3e2;
   background-color: rgba(66, 133, 244, 0.1);
   display: inline-block;
   padding: 2px 6px;
@@ -221,14 +221,13 @@
 
 .follow-up-header {
   font-size: 12px;
-  font-weight: bold;
   margin-bottom: 8px;
-  color: #4285f4;
+  color: #000000;
 }
 
 .follow-up-button {
-  background-color: #f0f7ff;
-  border: 1px solid #d0e3ff;
+  background-color: #f9f9f9;
+  border: 1px solid #f9f9f9;
   border-radius: 4px;
   padding: 8px;
   margin-bottom: 6px;
@@ -238,5 +237,5 @@
 }
 
 .follow-up-button:hover {
-  background-color: #e0f0ff;
+  background-color: #e0e0e0;
 }
