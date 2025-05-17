@@ -28,5 +28,11 @@
       "css": ["styles.css"]
     }
   ],
-  "options_page": "options.html"
+  "options_page": "options.html",
+  "web_accessible_resources": [
+    {
+      "resources": ["icons/*"],
+      "matches": ["*://*.fanfix.io/*"]
+    }
+  ]
 }

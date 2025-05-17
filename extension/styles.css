@@ -239,3 +239,66 @@
 .follow-up-button:hover {
   background-color: #e0e0e0;
 }
+
+/* Base icon styles */
+.icon {
+  display: inline-block;
+  vertical-align: middle;
+  width: 16px;
+  height: 16px;
+}
+
+/* Icon sizes */
+.icon-sm {
+  width: 14px;
+  height: 14px;
+}
+
+.icon-md {
+  width: 16px;
+  height: 16px;
+}
+
+.icon-lg {
+  width: 20px;
+  height: 20px;
+}
+
+/* Icon positioning */
+.icon-left {
+  margin-right: 6px;
+}
+
+.icon-right {
+  margin-left: 6px;
+}
+
+/* Icon in buttons */
+button .icon {
+  position: relative;
+  top: -1px; /* Fine-tune vertical alignment */
+}
+
+/* Icon in header */
+.suggestion-header .icon {
+  margin-right: 5px;
+}
+
+/* Icons in action buttons */
+.header-buttons .icon {
+  margin: 0;
+}
+
+/* Specific icon styles (if needed) */
+.icon-refresh, .icon-sync {
+  animation: spin 2s linear infinite paused;
+}
+
+.icon-refresh.spinning, .icon-sync.spinning {
+  animation-play-state: running;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}

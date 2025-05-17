@@ -323,7 +323,9 @@ function createSuggestionPanel() {
     <div class="suggestion-header">
       <span>Response Suggestions</span>
       <div class="header-buttons">
-        <button class="regenerate-btn" title="Get new suggestions">🔄</button>
+        <button class="regenerate-btn" title="Get new suggestions">
+          <img src="${chrome.runtime.getURL('icons/sync.svg')}" alt="Regenerate" class="icon icon-sm icon-sync">
+        </button>
         <button class="close-btn">-</button>
       </div>
     </div>
