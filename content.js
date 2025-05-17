@@ -521,8 +521,8 @@ function startProgressSimulation() {
   
   // Calculate the interval timing based on expected response time
   // If we want to reach 95% in about 5 seconds, we need to increase by ~4-5% every 250ms
-  const expectedResponseTime = 3000; // 3 seconds
-  const intervalTime = 150; // Update every 150ms
+  const expectedResponseTime = 7000; // 3 seconds
+  const intervalTime = 80; // Update every 80ms
   const totalIncrements = expectedResponseTime / intervalTime;
   const baseIncrement = 95 / totalIncrements;
   
