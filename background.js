@@ -1,4 +1,4 @@
-// Enhanced background.js with RAG using vector embeddings and multi-message support
+// Enhanced background.js with multi-message support for vector database
 
 // Enable debugging
 const debugMode = true;
@@ -33,6 +33,13 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       .then(suggestions => {
         debug('Got suggestions:', suggestions);
         sendResponse({ suggestions });
+        
+        // After successfully generating and sending the suggestions, 
+        // store the conversation for future reference if this is not a regenerate request
+        if (!request.regenerate && request.chatHistory && request.chatHistory.length > 0) {
+          storeNewConversation(request.message, suggestions)
+            .catch(err => debug('Error storing conversation:', err));
+        }
       })
       .catch(error => {
         debug('Error getting suggestions:', error);
@@ -64,6 +71,45 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
 });
 
+// Store new conversation when the user selects one of our suggestions
+async function storeNewConversation(fanMessage, suggestions) {
+  try {
+    // We'll only store the first suggestion that was selected
+    // Getting the actual selected suggestion would require additional tracking in content.js
+    // which could be implemented in the future
+    if (!suggestions || suggestions.length === 0) {
+      debug('No suggestions to store');
+      return;
+    }
+    
+    const chosenSuggestion = suggestions[0]; // Assume first suggestion
+    
+    // Create conversation object with embedding
+    const conversation = await storeConversation(fanMessage, chosenSuggestion);
+    
+    // Add to stored conversations
+    const data = await chrome.storage.local.get(['storedConversations']);
+    let storedConversations = data.storedConversations || [];
+    
+    // Add new conversation
+    storedConversations.push(conversation);
+    
+    // Limit to most recent 1000 conversations
+    if (storedConversations.length > 1000) {
+      storedConversations = storedConversations
+        .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))
+        .slice(0, 1000);
+    }
+    
+    // Save to storage
+    await chrome.storage.local.set({ storedConversations });
+    debug('Stored new conversation');
+  } catch (error) {
+    debug('Error storing new conversation:', error);
+    throw error;
+  }
+}
+
 // Handle importing conversations
 async function handleImportConversations(conversations) {
   debug('Handling import of', conversations.length, 'conversations');
@@ -72,6 +118,9 @@ async function handleImportConversations(conversations) {
     // First, get existing conversations
     const data = await chrome.storage.local.get(['storedConversations']);
     let storedConversations = data.storedConversations || [];
+    
+    // Convert any old format conversations to new format
+    conversations = conversations.map(convertToNewFormat);
     
     // Track which conversations need embeddings
     const needEmbeddings = conversations.filter(c => !c.embedding);
@@ -153,6 +202,38 @@ async function handleImportConversations(conversations) {
   }
 }
 
+// Convert old format (single creatorResponse) to new format (creatorResponses array)
+function convertToNewFormat(conversation) {
+  if (!conversation) return conversation;
+  
+  // If already in new format
+  if (conversation.creatorResponses) return conversation;
+  
+  // Convert from old format
+  if (conversation.creatorResponse) {
+    // Check if the creatorResponse is already a JSON object that should be an array
+    if (typeof conversation.creatorResponse === 'object' && !Array.isArray(conversation.creatorResponse)) {
+      // Convert object to array of values
+      const responses = Object.values(conversation.creatorResponse);
+      conversation.creatorResponses = responses;
+    } else if (Array.isArray(conversation.creatorResponse)) {
+      // Already an array, just rename
+      conversation.creatorResponses = conversation.creatorResponse;
+    } else {
+      // Single string response
+      conversation.creatorResponses = [conversation.creatorResponse];
+    }
+    
+    // Delete old property
+    delete conversation.creatorResponse;
+  } else {
+    // No response field at all, create empty array
+    conversation.creatorResponses = [];
+  }
+  
+  return conversation;
+}
+
 // Get embeddings from OpenAI API
 async function getEmbedding(text) {
   debug('Getting embedding for text:', text);
@@ -207,15 +288,33 @@ function calculateCosineSimilarity(vecA, vecB) {
 
 // Store conversation for future reference
 async function storeConversation(fanMessage, creatorResponse) {
-  debug('Storing conversation from import');
+  debug('Storing conversation');
   
   try {
     // Generate embedding for the fan message
     const messageEmbedding = await getEmbedding(fanMessage);
     
+    // Handle different types of creator responses
+    let creatorResponses = [];
+    
+    if (typeof creatorResponse === 'string') {
+      // Single string response
+      creatorResponses = [creatorResponse];
+    } else if (creatorResponse && creatorResponse.type) {
+      // New format with type and messages
+      if (creatorResponse.type === 'single') {
+        creatorResponses = [creatorResponse.messages[0]];
+      } else if (creatorResponse.type === 'multi') {
+        creatorResponses = [...creatorResponse.messages];
+      }
+    } else if (Array.isArray(creatorResponse)) {
+      // Array of responses
+      creatorResponses = creatorResponse;
+    }
+    
     return {
       fanMessage,
-      creatorResponse,
+      creatorResponses,
       embedding: messageEmbedding,
       timestamp: Date.now()
     };
@@ -242,8 +341,11 @@ async function findSimilarConversations(fanMessage) {
       return [];
     }
     
+    // Ensure all conversations are in the new format
+    const normalizedConversations = storedConversations.map(convertToNewFormat);
+    
     // Calculate similarity scores
-    const withSimilarity = storedConversations.map(convo => ({
+    const withSimilarity = normalizedConversations.map(convo => ({
       ...convo,
       similarity: calculateCosineSimilarity(messageEmbedding, convo.embedding)
     }));
@@ -333,7 +435,17 @@ Mix both single-message and multi-message suggestions for variety. For multi-mes
       similarConversations.forEach((convo, index) => {
         systemPrompt += `\n\nExample ${index + 1}:`;
         systemPrompt += `\nFan: "${convo.fanMessage}"`;
-        systemPrompt += `\nYou: "${convo.creatorResponse}"`;
+        
+        // Handle multi-message responses
+        if (convo.creatorResponses && convo.creatorResponses.length > 0) {
+          systemPrompt += `\nYou:`;
+          convo.creatorResponses.forEach((response, respIndex) => {
+            systemPrompt += `\n  Message ${respIndex + 1}: "${response}"`;
+          });
+        } else {
+          // Fallback for old format or missing responses
+          systemPrompt += `\nYou: "(No response recorded)"`;
+        }
       });
       
       systemPrompt += '\n\nUse these examples as inspiration for tone, style AND content. You can reuse similar content elements, successful phrases, and themes from the example responses and adapt them to the current context when appropriate.';
