@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
-  "name": "FanFix Chat Assistant",
-  "version": "1.0",
+  "name": "FanFix ChatAssist",
+  "version": "1.1",
   "description": "Get AI-powered chat suggestions for FanFix conversations",
   "permissions": ["storage", "activeTab", "scripting"],
   "host_permissions": ["*://*.fanfix.io/*"],
