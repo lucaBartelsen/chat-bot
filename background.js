@@ -271,15 +271,18 @@ async function getSuggestionsFromOpenAI(message, chatHistory, isRegenerate = fal
   const data = await chrome.storage.sync.get([
     'openaiApiKey', 
     'modelName',
-    'writingStyle'
+    'writingStyle',
+    'numSuggestions' // Add this line
   ]);
   
   const apiKey = data.openaiApiKey;
   const modelName = data.modelName || 'gpt-3.5-turbo';
   const writingStyle = data.writingStyle || '';
+  const numSuggestions = data.numSuggestions || 3; // Default to 3 if not set
   
   debug('Using model:', modelName);
   debug('Writing style configured:', writingStyle ? 'Yes' : 'No');
+  debug('Number of suggestions requested:', numSuggestions);
   
   if (!apiKey) {
     debug('API key not set');
@@ -292,11 +295,12 @@ async function getSuggestionsFromOpenAI(message, chatHistory, isRegenerate = fal
     debug('Similar conversations found:', similarConversations.length);
     
     // Create base system prompt
-    let systemPrompt = 'You are a helpful assistant that generates engaging and personalized responses for FanFix chats. Create 3 different suggested responses that are authentic, conversational, and likely to keep the conversation going. Make the responses varied in tone and length.';
+    
+    let systemPrompt = `You are a helpful assistant that generates engaging and personalized responses for FanFix chats. Create ${numSuggestions} different suggested responses that are authentic, conversational, and likely to keep the conversation going. Make the responses varied in tone and length. Return your suggestions in a JSON format with an array called "suggestions".`;
     
     // If this is a regenerate request, add instructions for more variety
     if (isRegenerate) {
-      systemPrompt += '\n\nIMPORTANT: This is a regeneration request. Please provide completely different suggestions than before with varied approaches and tones.';
+      systemPrompt += `\n\nIMPORTANT: This is a regeneration request. Please provide ${numSuggestions} completely different suggestions than before with varied approaches and tones.`;
     }
     
     // Add writing style instructions if available
@@ -333,7 +337,7 @@ async function getSuggestionsFromOpenAI(message, chatHistory, isRegenerate = fal
     // Add the latest message to respond to
     messages.push({
       role: 'user',
-      content: `Please suggest 3 different responses to this message: "${message}"`
+      content: `Please suggest ${numSuggestions} different responses to this message: "${message}"`
     });
     
     debug('Sending request to OpenAI with messages:', messages);
@@ -341,7 +345,7 @@ async function getSuggestionsFromOpenAI(message, chatHistory, isRegenerate = fal
     // Adjust temperature based on whether this is a regenerate request
     const temperature = isRegenerate ? 1.0 : 0.7;
     
-    // Make API request
+    // Make API request with JSON response format
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -352,7 +356,8 @@ async function getSuggestionsFromOpenAI(message, chatHistory, isRegenerate = fal
         model: modelName,
         messages: messages,
         temperature: temperature,
-        max_tokens: 300
+        max_tokens: 400, // Increased to accommodate more suggestions
+        response_format: { type: "json_object" } // Request JSON response
       })
     });
     
@@ -370,7 +375,7 @@ async function getSuggestionsFromOpenAI(message, chatHistory, isRegenerate = fal
     
     // Parse the suggestions from the response
     const content = data.choices[0].message.content;
-    const suggestions = parseResponses(content);
+    const suggestions = parseResponses(content, numSuggestions);
     
     return suggestions;
   } catch (error) {
@@ -379,31 +384,48 @@ async function getSuggestionsFromOpenAI(message, chatHistory, isRegenerate = fal
   }
 }
 
-function parseResponses(content) {
+function parseResponses(content, requestedCount = 3) {
   debug('Parsing response content:', content);
-  // Split by numbered points (1., 2., 3.) or by double line breaks
   let suggestions = [];
   
-  // Try to split by numbered points first
-  const numberedRegex = /\d+\.\s+(.*?)(?=\d+\.|$)/gs;
-  const matches = [...content.matchAll(numberedRegex)];
-  debug('Numbered matches:', matches.length);
-  
-  if (matches.length >= 2) {
-    suggestions = matches.map(match => match[1].trim());
-  } else {
-    // Fallback: split by double newlines or bullet points
-    suggestions = content
-      .split(/\n\n+|•\s+/)
-      .map(s => s.trim())
-      .filter(s => s.length > 0);
-    debug('Split by newlines/bullets, found:', suggestions.length);
+  try {
+    // Try to parse as JSON
+    const jsonResponse = JSON.parse(content);
+    
+    // Check if the response has a suggestions array
+    if (jsonResponse.suggestions && Array.isArray(jsonResponse.suggestions)) {
+      suggestions = jsonResponse.suggestions.filter(s => typeof s === 'string' && s.trim().length > 0);
+      debug('Successfully parsed JSON suggestions:', suggestions.length);
+    }
+  } catch (error) {
+    debug('Failed to parse JSON, falling back to text parsing:', error);
+    
+    // Original parsing logic as fallback
+    const numberedRegex = /\d+\.\s+(.*?)(?=\d+\.|$)/gs;
+    const matches = [...content.matchAll(numberedRegex)];
+    
+    if (matches.length >= 2) {
+      suggestions = matches.map(match => match[1].trim());
+    } else {
+      suggestions = content
+        .split(/\n\n+|•\s+/)
+        .map(s => s.trim())
+        .filter(s => s.length > 0);
+    }
   }
   
-  // If we still don't have at least 1 suggestion, just return the whole content
+  // Ensure we have at least one suggestion
   if (suggestions.length < 1) {
     debug('No suggestions parsed, using whole content');
     suggestions = [content.trim()];
+  }
+  
+  // Remove any quotation marks that might be wrapping individual suggestions
+  suggestions = suggestions.map(s => s.replace(/^["'](.*)["']$/s, '$1'));
+  
+  // Limit to the requested number
+  if (suggestions.length > requestedCount) {
+    suggestions = suggestions.slice(0, requestedCount);
   }
   
   debug('Final parsed suggestions:', suggestions);

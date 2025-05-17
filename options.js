@@ -2,6 +2,7 @@ document.addEventListener('DOMContentLoaded', function() {
   const apiKeyInput = document.getElementById('apiKey');
   const modelNameSelect = document.getElementById('modelName');
   const writingStyleTextarea = document.getElementById('writingStyle');
+  const numSuggestionsInput = document.getElementById('numSuggestions'); // Add this line
   const saveBtn = document.getElementById('saveBtn');
   const statusEl = document.getElementById('status');
   const embeddingStatsEl = document.getElementById('embeddingStats');
@@ -12,9 +13,10 @@ document.addEventListener('DOMContentLoaded', function() {
   const importProgressContainer = document.getElementById('importProgressContainer');
   const importStatusEl = document.getElementById('importStatus');
   const importProgressBar = document.getElementById('importProgressBar');
+
   
   // Load saved settings
-  chrome.storage.sync.get(['openaiApiKey', 'modelName', 'writingStyle'], function(data) {
+  chrome.storage.sync.get(['openaiApiKey', 'modelName', 'writingStyle', 'numSuggestions'], function(data) {
     if (data.openaiApiKey) {
       apiKeyInput.value = data.openaiApiKey;
     }
@@ -36,6 +38,11 @@ document.addEventListener('DOMContentLoaded', function() {
     if (data.writingStyle) {
       writingStyleTextarea.value = data.writingStyle;
     }
+    
+    // Load number of suggestions
+    if (data.numSuggestions) {
+      numSuggestionsInput.value = data.numSuggestions;
+    }
   });
   
   // Save settings when the button is clicked
@@ -43,6 +50,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const apiKey = apiKeyInput.value.trim();
     const modelName = modelNameSelect.value;
     const writingStyle = writingStyleTextarea.value.trim();
+    const numSuggestions = parseInt(numSuggestionsInput.value) || 3; // Default to 3
     
     // Validate API key format
     if (!apiKey || !apiKey.startsWith('sk-')) {
@@ -50,11 +58,18 @@ document.addEventListener('DOMContentLoaded', function() {
       return;
     }
     
+    // Validate number of suggestions
+    if (numSuggestions < 1 || numSuggestions > 10) {
+      showStatus('Number of suggestions must be between 1 and 10', 'error');
+      return;
+    }
+    
     // Save settings
     chrome.storage.sync.set({
       openaiApiKey: apiKey,
       modelName: modelName,
-      writingStyle: writingStyle
+      writingStyle: writingStyle,
+      numSuggestions: numSuggestions
     }, function() {
       showStatus('Settings saved successfully!', 'success');
     });
@@ -281,4 +296,9 @@ document.addEventListener('DOMContentLoaded', function() {
       });
     }
   }
+  numSuggestionsInput.addEventListener('input', function() {
+    const value = parseInt(numSuggestionsInput.value) || 0;
+    if (value < 1) numSuggestionsInput.value = 1;
+    if (value > 10) numSuggestionsInput.value = 10;
+  });
 });
