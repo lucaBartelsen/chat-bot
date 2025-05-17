@@ -187,32 +187,40 @@ document.addEventListener('DOMContentLoaded', function() {
     const reader = new FileReader();
     
     reader.onload = function(e) {
-      try {
-        const conversations = JSON.parse(e.target.result);
-        
-        if (!Array.isArray(conversations)) {
-          throw new Error('Invalid file format: not an array of conversations');
-        }
-        
-        // Validate conversations
-        const validConversations = conversations.filter(convo => 
-          convo && 
-          typeof convo === 'object' &&
-          typeof convo.fanMessage === 'string' &&
-          typeof convo.creatorResponse === 'string'
-        );
-        
-        if (validConversations.length === 0) {
-          throw new Error('No valid conversations found in the file');
-        }
-        
-        // Start the import process
-        startImportProcess(validConversations);
-        
-      } catch (error) {
-        showStatus('Error importing conversations: ' + error.message, 'error');
-      }
-    };
+  try {
+    const conversations = JSON.parse(e.target.result);
+    
+    if (!Array.isArray(conversations)) {
+      throw new Error('Invalid file format: not an array of conversations');
+    }
+    
+    // Validate conversations - accept both old and new formats
+    const validConversations = conversations.filter(convo => 
+      convo && 
+      typeof convo === 'object' &&
+      typeof convo.fanMessage === 'string' &&
+      (
+        // Accept old format (string creatorResponse)
+        typeof convo.creatorResponse === 'string' ||
+        // Accept new format (array of creatorResponses)
+        Array.isArray(convo.creatorResponses) ||
+        // Also accept object with multiple creatorResponse properties
+        // This will be fixed in background.js
+        Object.keys(convo).some(key => key === 'creatorResponse')
+      )
+    );
+    
+    if (validConversations.length === 0) {
+      throw new Error('No valid conversations found in the file');
+    }
+    
+    // Start the import process
+    startImportProcess(validConversations);
+    
+  } catch (error) {
+    showStatus('Error importing conversations: ' + error.message, 'error');
+  }
+};
     
     reader.onerror = function() {
       showStatus('Error reading file', 'error');
