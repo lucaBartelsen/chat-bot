@@ -321,7 +321,7 @@ function createSuggestionPanel() {
   suggestionPanel.className = 'fanfix-suggestion-panel';
   suggestionPanel.innerHTML = `
     <div class="suggestion-header">
-      <span>💬 Response Suggestions</span>
+      <span>Response Suggestions</span>
       <div class="header-buttons">
         <button class="regenerate-btn" title="Get new suggestions">🔄</button>
         <button class="close-btn">-</button>
