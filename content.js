@@ -1,6 +1,6 @@
-// Verbesserte content.js, die Nachrichten nach IDs sortiert
+// Improved content.js with multi-message suggestion support
 
-// Globale Variablen
+// Global variables
 let suggestionPanel;
 let lastProcessedMessageId = '';
 let waitingForSuggestion = false;
@@ -8,6 +8,10 @@ let checkIntervalId = null;
 let debugMode = true;
 let progressInterval = null;
 let currentProgress = 0;
+let lastMessage = '';
+let lastChatHistory = [];
+let pendingFollowUps = null;
+let followUpContainer = null;
 
 function debug(message, obj = null) {
   if (!debugMode) return;
@@ -19,36 +23,36 @@ function debug(message, obj = null) {
   }
 }
 
-// Initialisierungsfunktion
+// Initialization function
 function initExtension() {
   debug('Initializing FanFix Chat Assistant');
   
-  // Starte einen einfachen Timer
+  // Start a simple timer
   if (checkIntervalId) clearInterval(checkIntervalId);
   
-  // Wir prüfen alle 2 Sekunden auf neue Nachrichten
+  // Check for new messages every 2 seconds
   checkIntervalId = setInterval(() => {
-    // Prüfen, ob wir auf einer Chat-Seite sind
+    // Check if we're on a chat page
     const isChatPage = window.location.href.includes('fanfix.io') && 
                       (window.location.href.includes('/chat') || 
                        window.location.href.includes('/messages'));
     
     if (isChatPage) {
-      // Versuche, die neueste Nachricht vom Fan zu finden
+      // Try to find the latest message from the fan
       checkForNewMessages();
     } else {
-      // Wenn wir nicht auf einer Chat-Seite sind, verstecke das Panel
+      // If we're not on a chat page, hide the panel
       if (suggestionPanel) suggestionPanel.style.display = 'none';
     }
   }, 2000);
   
-  // Erstelle das Panel einmal
+  // Create the panel once
   createSuggestionPanel();
 }
 
-// Extrahiert die numerische ID aus einer Nachrichten-ID
+// Extract the numeric ID from a message ID
 function extractMessageId(message) {
-  // Die ID ist im Format "message-1029552743"
+  // The ID is in the format "message-1029552743"
   const idAttr = message.id || '';
   const matches = idAttr.match(/message-(\d+)/);
   
@@ -56,12 +60,12 @@ function extractMessageId(message) {
     return parseInt(matches[1], 10);
   }
   
-  return 0; // Fallback, falls keine ID gefunden wird
+  return 0; // Fallback if no ID is found
 }
 
-// Prüft auf neue Nachrichten, sortiert nach IDs
+// Check for new messages, sorted by IDs
 function checkForNewMessages() {
-  // Wenn wir bereits auf eine Antwort warten, nicht erneut prüfen
+  // If we're already waiting for a response, don't check again
   if (waitingForSuggestion) return;
   
   // Find all "othermessage" elements (messages from fans)
@@ -73,13 +77,13 @@ function checkForNewMessages() {
     return;
   }
   
-  // Konvertiere NodeList zu Array und sortiere nach IDs
+  // Convert NodeList to Array and sort by IDs
   const sortedFanMessages = Array.from(fanMessages)
-    .filter(msg => msg.id) // Nur Nachrichten mit IDs
+    .filter(msg => msg.id) // Only messages with IDs
     .sort((a, b) => {
       const idA = extractMessageId(a);
       const idB = extractMessageId(b);
-      return idB - idA; // Absteigend sortieren (höchste zuerst)
+      return idB - idA; // Sort in descending order (highest first)
     });
   
   if (sortedFanMessages.length === 0) {
@@ -87,13 +91,13 @@ function checkForNewMessages() {
     return;
   }
   
-  // Hole die Nachricht mit der höchsten ID (neueste)
+  // Get the message with the highest ID (latest)
   const latestFanMessage = sortedFanMessages[0];
   const messageId = extractMessageId(latestFanMessage);
   
   debug('Latest fan message ID:', messageId);
   
-  // Versuche, den Text zu extrahieren
+  // Try to extract the text
   const textElement = latestFanMessage.querySelector('[data-testid="message-thread-content-ds"] .interRegular14 div');
   
   if (!textElement) {
@@ -103,7 +107,7 @@ function checkForNewMessages() {
   
   const messageText = textElement.textContent.trim();
   
-  // Wenn es eine neue Nachricht ist (basierend auf ID), verarbeite sie
+  // If it's a new message (based on ID), process it
   if (messageText && messageId.toString() !== lastProcessedMessageId) {
     debug('New fan message detected:', messageText);
     debug('Message ID:', messageId);
@@ -112,26 +116,26 @@ function checkForNewMessages() {
   }
 }
 
-// Holt den aktuellen Chat-Verlauf, sortiert nach IDs
+// Get the current chat history, sorted by IDs
 function getRecentChatHistory() {
   const chatHistory = [];
   
-  // Finde alle Nachrichten
+  // Find all messages
   const allMessages = document.querySelectorAll('.mymessage, .othermessage');
   
-  // Konvertiere zu Array und sortiere nach IDs
+  // Convert to Array and sort by IDs
   const sortedMessages = Array.from(allMessages)
-    .filter(msg => msg.id) // Nur Nachrichten mit IDs
+    .filter(msg => msg.id) // Only messages with IDs
     .sort((a, b) => {
       const idA = extractMessageId(a);
       const idB = extractMessageId(b);
-      return idA - idB; // Aufsteigend sortieren für chronologische Reihenfolge
+      return idA - idB; // Sort in ascending order for chronological order
     });
   
-  // Nimm nur die letzten 10 Nachrichten
+  // Only take the last 10 messages
   const recentMessages = sortedMessages.slice(-10);
   
-  // Füge sie zum Chat-Verlauf hinzu
+  // Add them to the chat history
   for (const message of recentMessages) {
     const isCreator = message.classList.contains('mymessage');
     const textElement = message.querySelector('[data-testid="message-thread-content-ds"] .interRegular14 div');
@@ -147,7 +151,7 @@ function getRecentChatHistory() {
   return chatHistory;
 }
 
-// Verarbeitet eine Nachricht und holt Vorschläge
+// Process a message and get suggestions
 function processMessage(message, chatHistory) {
   debug('Processing message:', message);
   debug('Chat history:', chatHistory);
@@ -307,8 +311,7 @@ function regenerateSuggestions() {
   });
 }
 
-// Erstellt das Suggestion-Panel
-// Modify the createSuggestionPanel function
+// Create the suggestion panel
 function createSuggestionPanel() {
   // If the panel already exists, nothing to do
   if (suggestionPanel) return;
@@ -355,11 +358,7 @@ function createSuggestionPanel() {
   }, 100);
 }
 
-// Add a variable to store the latest message and chat history
-let lastMessage = '';
-let lastChatHistory = [];
-
-// Aktualisiert das Suggestion-Panel
+// Update the suggestion panel
 function updateSuggestionPanel(message, showProgress = false) {
   if (!suggestionPanel) createSuggestionPanel();
   
@@ -479,7 +478,6 @@ function startWaitingAnimation() {
   }
 }
 
-// Replace the stopWaitingAnimation function
 function stopWaitingAnimation() {
   debug('Stopping waiting animation');
   
@@ -523,8 +521,8 @@ function startProgressSimulation() {
   
   // Calculate the interval timing based on expected response time
   // If we want to reach 95% in about 5 seconds, we need to increase by ~4-5% every 250ms
-  const expectedResponseTime = 3000; // 5 seconds
-  const intervalTime = 150; // Update every 250ms
+  const expectedResponseTime = 3000; // 3 seconds
+  const intervalTime = 150; // Update every 150ms
   const totalIncrements = expectedResponseTime / intervalTime;
   const baseIncrement = 95 / totalIncrements;
   
@@ -610,7 +608,7 @@ function stopProgressSimulation() {
   }
 }
 
-// Zeigt Vorschläge im Panel an
+// Display suggestions in the panel
 function displaySuggestions(suggestions) {
   if (!suggestionPanel) createSuggestionPanel();
   
@@ -626,7 +624,40 @@ function displaySuggestions(suggestions) {
   suggestions.forEach((suggestion) => {
     const suggestionElement = document.createElement('div');
     suggestionElement.className = 'suggestion-item';
-    suggestionElement.textContent = suggestion;
+    
+    if (suggestion.type === 'multi') {
+      // For multi-message suggestions
+      suggestionElement.classList.add('multi-message');
+      
+      // Create container for messages
+      const messagesContainer = document.createElement('div');
+      messagesContainer.className = 'messages-container';
+      
+      // Display messages
+      suggestion.messages.forEach((msg, index) => {
+        const msgElement = document.createElement('div');
+        msgElement.className = 'message-content';
+        if (index === 0) {
+          msgElement.className += ' primary-message';
+        } else {
+          msgElement.className += ' follow-up-message';
+        }
+        msgElement.textContent = msg;
+        messagesContainer.appendChild(msgElement);
+      });
+      
+      suggestionElement.appendChild(messagesContainer);
+      
+      // Add multi-message indicator
+      const indicator = document.createElement('div');
+      indicator.className = 'multi-indicator';
+      indicator.textContent = `${suggestion.messages.length}-part response`;
+      suggestionElement.appendChild(indicator);
+    } else {
+      // For single message suggestions
+      suggestionElement.textContent = suggestion.messages[0];
+    }
+    
     suggestionElement.addEventListener('click', () => {
       insertSuggestion(suggestion);
     });
@@ -644,32 +675,143 @@ function displaySuggestions(suggestions) {
   }, 30000); // Wait 30 seconds before showing the waiting animation again
 }
 
-// Fügt einen Vorschlag in das Eingabefeld ein
-function insertSuggestion(text) {
-  // Finde das Eingabefeld
+// Insert a suggestion into the input field
+function insertSuggestion(suggestion) {
+  // Find the input field
+  const inputField = document.querySelector('[placeholder="Write a message..."]');
+  
+  if (!inputField) {
+    debug('Input field not found');
+    return;
+  }
+  
+  // Clean up any existing follow-up UI
+  if (followUpContainer) {
+    followUpContainer.remove();
+    followUpContainer = null;
+  }
+  
+  if (suggestion.type === 'multi' && suggestion.messages.length > 1) {
+    // For multi-message suggestions, insert only the first message initially
+    inputField.value = suggestion.messages[0];
+    
+    // Store the remaining messages for follow-up
+    pendingFollowUps = suggestion.messages.slice(1);
+    
+    // Create or update the follow-up message UI
+    createFollowUpUI();
+  } else {
+    // Single message suggestion
+    inputField.value = suggestion.messages[0];
+    
+    // Clear any pending follow-ups
+    pendingFollowUps = null;
+  }
+  
+  inputField.focus();
+  
+  // Trigger an input event
+  const inputEvent = new Event('input', { bubbles: true });
+  inputField.dispatchEvent(inputEvent);
+  
+  debug('Suggestion inserted into input field');
+}
+
+function createFollowUpUI() {
+  // Remove any existing follow-up container
+  if (followUpContainer) {
+    followUpContainer.remove();
+  }
+  
+  // Create new container
+  followUpContainer = document.createElement('div');
+  followUpContainer.className = 'follow-up-queue';
+  
+  // Add header
+  const header = document.createElement('div');
+  header.className = 'follow-up-header';
+  header.textContent = `${pendingFollowUps.length} follow-up messages ready`;
+  followUpContainer.appendChild(header);
+  
+  // Add each follow-up as a button
+  pendingFollowUps.forEach((message, index) => {
+    const button = document.createElement('div');
+    button.className = 'follow-up-button';
+    
+    // Truncate long messages in the preview
+    const truncatedMessage = message.length > 50 
+      ? message.substring(0, 47) + '...' 
+      : message;
+    
+    button.textContent = truncatedMessage;
+    
+    button.addEventListener('click', () => {
+      useFollowUpMessage(index);
+    });
+    
+    followUpContainer.appendChild(button);
+  });
+  
+  // Add close button
+  const closeButton = document.createElement('div');
+  closeButton.className = 'follow-up-close';
+  closeButton.textContent = '✕';
+  closeButton.style.position = 'absolute';
+  closeButton.style.top = '5px';
+  closeButton.style.right = '5px';
+  closeButton.style.cursor = 'pointer';
+  closeButton.style.fontSize = '12px';
+  closeButton.style.color = '#666';
+  
+  closeButton.addEventListener('click', () => {
+    followUpContainer.remove();
+    followUpContainer = null;
+    pendingFollowUps = null;
+  });
+  
+  followUpContainer.appendChild(closeButton);
+  
+  // Add to document
+  document.body.appendChild(followUpContainer);
+}
+
+function useFollowUpMessage(index) {
+  if (!pendingFollowUps || !pendingFollowUps[index]) return;
+  
+  const message = pendingFollowUps[index];
+  
+  // Find the input field
   const inputField = document.querySelector('[placeholder="Write a message..."]');
   
   if (inputField) {
-    // Setze den Wert des Eingabefelds
-    inputField.value = text;
+    // Set the message
+    inputField.value = message;
     inputField.focus();
     
-    // Trigger ein input-Event
+    // Trigger input event
     const inputEvent = new Event('input', { bubbles: true });
     inputField.dispatchEvent(inputEvent);
     
-    debug('Suggestion inserted into input field');
-  } else {
-    debug('Input field not found');
+    // Remove used message from pending list
+    pendingFollowUps.splice(index, 1);
+    
+    // Update or remove the UI
+    if (pendingFollowUps.length === 0) {
+      followUpContainer.remove();
+      followUpContainer = null;
+      pendingFollowUps = null;
+    } else {
+      createFollowUpUI(); // Recreate to update the UI
+    }
   }
 }
 
-// Höre auf Nachrichten vom Popup
+// Listen for messages from the popup
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === 'refresh') {
     debug('Refresh requested from popup');
     
-    // Erzwinge eine neue Prüfung
+    // Force a new check
     lastProcessedMessageId = '';
     checkForNewMessages();
     
@@ -681,7 +823,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   return false;
 });
 
-// Initialisiere die Extension, sobald das Dokument bereit ist
+// Initialize the extension when the document is ready
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', initExtension);
 } else {

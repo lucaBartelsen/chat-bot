@@ -1,4 +1,4 @@
-/* Updated styles.css with responsive height */
+/* Updated styles.css with responsive height and multi-message support */
 
 .fanfix-suggestion-panel {
   position: fixed;
@@ -161,4 +161,82 @@
 @keyframes bounce {
   0%, 100% { transform: translateY(0); }
   50% { transform: translateY(-2px); }
+}
+
+/* Multi-message suggestion styles */
+.multi-message {
+  background-color: #f5f8ff !important;
+  border-left: 3px solid #4285f4;
+}
+
+.messages-container {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.message-content {
+  padding: 4px 0;
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+
+.follow-up-message {
+  color: #666;
+  font-size: 0.9em;
+  position: relative;
+  padding-left: 12px;
+  border-top: 1px dashed #ddd;
+  padding-top: 8px;
+}
+
+.follow-up-message::before {
+  content: "↪";
+  position: absolute;
+  left: 0;
+  color: #4285f4;
+}
+
+.multi-indicator {
+  margin-top: 8px;
+  font-size: 11px;
+  color: #4285f4;
+  background-color: rgba(66, 133, 244, 0.1);
+  display: inline-block;
+  padding: 2px 6px;
+  border-radius: 10px;
+}
+
+.follow-up-queue {
+  position: fixed;
+  bottom: 80px; /* Positioned at same height as the message input area */
+  right: 330px; /* Positioned next to suggestion panel */
+  background-color: white;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  padding: 10px;
+  max-width: 250px;
+  z-index: 9999;
+}
+
+.follow-up-header {
+  font-size: 12px;
+  font-weight: bold;
+  margin-bottom: 8px;
+  color: #4285f4;
+}
+
+.follow-up-button {
+  background-color: #f0f7ff;
+  border: 1px solid #d0e3ff;
+  border-radius: 4px;
+  padding: 8px;
+  margin-bottom: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  transition: background-color 0.2s ease;
+}
+
+.follow-up-button:hover {
+  background-color: #e0f0ff;
 }

@@ -1,4 +1,4 @@
-// Enhanced background.js with RAG using vector embeddings
+// Enhanced background.js with RAG using vector embeddings and multi-message support
 
 // Enable debugging
 const debugMode = true;
@@ -272,7 +272,7 @@ async function getSuggestionsFromOpenAI(message, chatHistory, isRegenerate = fal
     'openaiApiKey', 
     'modelName',
     'writingStyle',
-    'numSuggestions' // Add this line
+    'numSuggestions'
   ]);
   
   const apiKey = data.openaiApiKey;
@@ -294,9 +294,27 @@ async function getSuggestionsFromOpenAI(message, chatHistory, isRegenerate = fal
     const similarConversations = await findSimilarConversations(message);
     debug('Similar conversations found:', similarConversations.length);
     
-    // Create base system prompt
-    
-    let systemPrompt = `You are a helpful assistant that generates engaging and personalized responses for FanFix chats. Create ${numSuggestions} different suggested responses that are authentic, conversational, and likely to keep the conversation going. Make the responses varied in tone and length. Return your suggestions in a JSON format with an array called "suggestions".`;
+    // Create base system prompt with multi-message support
+    let systemPrompt = `You are a helpful assistant that generates engaging and personalized responses for FanFix chats. 
+
+Create ${numSuggestions} different suggested responses. Each suggestion can be either a single message or a sequence of 2-3 connected messages that would be sent in sequence.
+
+Return your suggestions in this exact JSON format:
+{
+  "suggestions": [
+    {
+      "type": "single",
+      "messages": ["Your complete single message here"]
+    },
+    {
+      "type": "multi",
+      "messages": ["First message in sequence", "Second follow-up message", "Optional third message"]
+    },
+    // Additional suggestions...
+  ]
+}
+
+Mix both single-message and multi-message suggestions for variety. For multi-message suggestions, make sure each message in the sequence flows naturally from one to the next, as if in a real conversation.`;
     
     // If this is a regenerate request, add instructions for more variety
     if (isRegenerate) {
@@ -356,7 +374,7 @@ async function getSuggestionsFromOpenAI(message, chatHistory, isRegenerate = fal
         model: modelName,
         messages: messages,
         temperature: temperature,
-        max_tokens: 400, // Increased to accommodate more suggestions
+        max_tokens: 600, // Increased to accommodate more multi-message suggestions
         response_format: { type: "json_object" } // Request JSON response
       })
     });
@@ -394,39 +412,68 @@ function parseResponses(content, requestedCount = 3) {
     
     // Check if the response has a suggestions array
     if (jsonResponse.suggestions && Array.isArray(jsonResponse.suggestions)) {
-      suggestions = jsonResponse.suggestions.filter(s => typeof s === 'string' && s.trim().length > 0);
+      // Process each suggestion based on its type
+      suggestions = jsonResponse.suggestions
+        .filter(s => s && (s.type === 'single' || s.type === 'multi'))
+        .filter(s => Array.isArray(s.messages) && s.messages.length > 0)
+        .slice(0, requestedCount); // Limit to requested number
+      
       debug('Successfully parsed JSON suggestions:', suggestions.length);
     }
   } catch (error) {
-    debug('Failed to parse JSON, falling back to text parsing:', error);
+    debug('Failed to parse JSON, creating default single-message suggestions:', error);
     
-    // Original parsing logic as fallback
+    // Fallback to original logic for backward compatibility
     const numberedRegex = /\d+\.\s+(.*?)(?=\d+\.|$)/gs;
     const matches = [...content.matchAll(numberedRegex)];
     
     if (matches.length >= 2) {
-      suggestions = matches.map(match => match[1].trim());
+      const textSuggestions = matches.map(match => match[1].trim());
+      suggestions = textSuggestions.map(text => ({
+        type: 'single',
+        messages: [text]
+      }));
     } else {
-      suggestions = content
+      const textSuggestions = content
         .split(/\n\n+|•\s+/)
         .map(s => s.trim())
         .filter(s => s.length > 0);
+        
+      suggestions = textSuggestions.map(text => ({
+        type: 'single',
+        messages: [text]
+      }));
     }
   }
   
   // Ensure we have at least one suggestion
   if (suggestions.length < 1) {
-    debug('No suggestions parsed, using whole content');
-    suggestions = [content.trim()];
+    debug('No suggestions parsed, using whole content as a single message');
+    suggestions = [{
+      type: 'single',
+      messages: [content.trim()]
+    }];
   }
   
-  // Remove any quotation marks that might be wrapping individual suggestions
-  suggestions = suggestions.map(s => s.replace(/^["'](.*)["']$/s, '$1'));
-  
-  // Limit to the requested number
-  if (suggestions.length > requestedCount) {
-    suggestions = suggestions.slice(0, requestedCount);
-  }
+  // Verify all suggestions have the correct structure
+  suggestions = suggestions.map(s => {
+    // Ensure each suggestion has a valid type
+    if (s.type !== 'single' && s.type !== 'multi') {
+      s.type = 'single';
+    }
+    
+    // Ensure messages is an array of strings
+    if (!Array.isArray(s.messages)) {
+      s.messages = [String(s.messages)];
+    }
+    
+    // Remove any quotation marks that might be wrapping individual messages
+    s.messages = s.messages.map(m => 
+      typeof m === 'string' ? m.replace(/^["'](.*)["']$/s, '$1') : String(m)
+    );
+    
+    return s;
+  });
   
   debug('Final parsed suggestions:', suggestions);
   return suggestions;
