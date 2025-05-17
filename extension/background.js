@@ -399,7 +399,7 @@ async function getSuggestionsFromOpenAI(message, chatHistory, isRegenerate = fal
     // Create base system prompt with multi-message support
     let systemPrompt = `You are a helpful assistant that generates engaging and personalized responses for FanFix chats. 
 
-Create ${numSuggestions} different suggested responses. Each suggestion can be either a single message or a sequence of 2-3 connected messages that would be sent in sequence.
+Create ${numSuggestions} different suggested responses. Each suggestion can be either a single message or a multi message with sequence of 2-3 connected messages that would be sent in sequence.
 
 Return your suggestions in this exact JSON format:
 {
@@ -416,7 +416,7 @@ Return your suggestions in this exact JSON format:
   ]
 }
 
-Mix both single-message and multi-message suggestions for variety. For multi-message suggestions, make sure each message in the sequence flows naturally from one to the next, as if in a real conversation.`;
+Prefer multi-message but if the reply is very short you can do single-message suggestions. For multi-message suggestions, make sure each message in the sequence flows naturally from one to the next, as if in a real conversation.`;
     
     // If this is a regenerate request, add instructions for more variety
     if (isRegenerate) {
