@@ -627,40 +627,32 @@ function displaySuggestions(suggestions) {
   // Add each suggestion
   suggestions.forEach((suggestion) => {
     const suggestionElement = document.createElement('div');
-    suggestionElement.className = 'suggestion-item';
+    suggestionElement.className = 'suggestion-item multi-message';
     
-    if (suggestion.type === 'multi') {
-      // For multi-message suggestions
-      suggestionElement.classList.add('multi-message');
-      
-      // Create container for messages
-      const messagesContainer = document.createElement('div');
-      messagesContainer.className = 'messages-container';
-      
-      // Display messages
-      suggestion.messages.forEach((msg, index) => {
-        const msgElement = document.createElement('div');
-        msgElement.className = 'message-content';
-        if (index === 0) {
-          msgElement.className += ' primary-message';
-        } else {
-          msgElement.className += ' follow-up-message';
-        }
-        msgElement.textContent = msg;
-        messagesContainer.appendChild(msgElement);
-      });
-      
-      suggestionElement.appendChild(messagesContainer);
-      
-      // Add multi-message indicator
-      const indicator = document.createElement('div');
-      indicator.className = 'multi-indicator';
-      indicator.textContent = `${suggestion.messages.length}-part response`;
-      suggestionElement.appendChild(indicator);
-    } else {
-      // For single message suggestions
-      suggestionElement.textContent = suggestion.messages[0];
-    }
+    // Create container for messages
+    const messagesContainer = document.createElement('div');
+    messagesContainer.className = 'messages-container';
+    
+    // Display messages
+    suggestion.messages.forEach((msg, index) => {
+      const msgElement = document.createElement('div');
+      msgElement.className = 'message-content';
+      if (index === 0) {
+        msgElement.className += ' primary-message';
+      } else {
+        msgElement.className += ' follow-up-message';
+      }
+      msgElement.textContent = msg;
+      messagesContainer.appendChild(msgElement);
+    });
+    
+    suggestionElement.appendChild(messagesContainer);
+    
+    // Add multi-message indicator
+    const indicator = document.createElement('div');
+    indicator.className = 'multi-indicator';
+    indicator.textContent = `${suggestion.messages.length}-part response`;
+    suggestionElement.appendChild(indicator);
     
     suggestionElement.addEventListener('click', () => {
       insertSuggestion(suggestion);

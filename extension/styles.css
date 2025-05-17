@@ -63,16 +63,22 @@
 .suggestion-item {
   padding: 10px;
   border-radius: 4px;
-  background-color: #f9f9f9;
+  background-color: #f9f9f9 !important;
+  border-left: 3px solid #d2b3e2;
   margin-bottom: 8px;
   cursor: pointer;
   transition: background-color 0.2s ease;
-  overflow-wrap: break-word; /* Ensure long text wraps properly */
+  overflow-wrap: break-word;
   word-break: break-word;
 }
 
 .suggestion-item:hover {
-  background-color: #e0e0e0;
+  background-color: #e0e0e0 !important;
+  border-left: 3px solid #d2b3e2;
+}
+
+.primary-message {
+  color: #000;
 }
 
 .header-buttons {

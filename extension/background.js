@@ -507,7 +507,20 @@ Mix both single-message and multi-message suggestions for variety. For multi-mes
     const content = data.choices[0].message.content;
     const suggestions = parseResponses(content, numSuggestions);
     
-    return suggestions;
+    function ensureMultiMessageFormat(suggestions) {
+      return suggestions.map(suggestion => {
+        // Convert any suggestions that aren't explicitly typed as "multi" to use multi-message format
+        if (suggestion.type !== 'multi') {
+          return {
+            type: 'multi',  // Force type to be 'multi'
+            messages: Array.isArray(suggestion.messages) ? suggestion.messages : [suggestion.messages]
+          };
+        }
+        return suggestion;
+      });
+    }
+    
+    return ensureMultiMessageFormat(suggestions);;
   } catch (error) {
     debug('OpenAI API error:', error);
     throw error;
