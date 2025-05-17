@@ -25,7 +25,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     debug('Chat history:', request.chatHistory);
     debug('Is regenerate request:', !!request.regenerate);
     
-    getSuggestionsFromOpenAI(request.message, request.chatHistory, !!request.regenerate)
+    getSuggestionsFromOpenAI(
+      request.message, 
+      request.chatHistory, 
+      !!request.regenerate
+    )
       .then(suggestions => {
         debug('Got suggestions:', suggestions);
         sendResponse({ suggestions });
@@ -283,18 +287,18 @@ async function getSuggestionsFromOpenAI(message, chatHistory, isRegenerate = fal
   }
   
   try {
-    // NEW: Find similar past conversations using vector search
+    // Find similar past conversations using vector search
     const similarConversations = await findSimilarConversations(message);
     debug('Similar conversations found:', similarConversations.length);
     
     // Create base system prompt
-    let systemPrompt = 'You are a helpful assistant that generates engaging and personalized responses for FanFix chats. Create 5 different suggested responses that are authentic, conversational, and likely to keep the conversation going. Make the responses varied in tone and length.';
+    let systemPrompt = 'You are a helpful assistant that generates engaging and personalized responses for FanFix chats. Create 3 different suggested responses that are authentic, conversational, and likely to keep the conversation going. Make the responses varied in tone and length.';
     
     // If this is a regenerate request, add instructions for more variety
     if (isRegenerate) {
       systemPrompt += '\n\nIMPORTANT: This is a regeneration request. Please provide completely different suggestions than before with varied approaches and tones.';
     }
-
+    
     // Add writing style instructions if available
     if (writingStyle && writingStyle.trim()) {
       systemPrompt += `\n\nIMPORTANT: Use the following writing style for all responses: ${writingStyle}`;
@@ -334,6 +338,7 @@ async function getSuggestionsFromOpenAI(message, chatHistory, isRegenerate = fal
     
     debug('Sending request to OpenAI with messages:', messages);
     
+    // Adjust temperature based on whether this is a regenerate request
     const temperature = isRegenerate ? 1.0 : 0.7;
     
     // Make API request
@@ -350,8 +355,6 @@ async function getSuggestionsFromOpenAI(message, chatHistory, isRegenerate = fal
         max_tokens: 300
       })
     });
-
-    clearTimeout(timeoutId);
     
     const responseStatus = response.status;
     debug('Response status:', responseStatus);
@@ -371,7 +374,6 @@ async function getSuggestionsFromOpenAI(message, chatHistory, isRegenerate = fal
     
     return suggestions;
   } catch (error) {
-    clearTimeout(timeoutId);
     debug('OpenAI API error:', error);
     throw error;
   }
