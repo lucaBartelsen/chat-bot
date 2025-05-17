@@ -149,16 +149,21 @@ function processMessage(message, chatHistory) {
   debug('Processing message:', message);
   debug('Chat history:', chatHistory);
   
-  // Zeige, dass wir auf Vorschläge warten
+  // Store the message and chat history for potential regeneration
+  lastMessage = message;
+  lastChatHistory = [...chatHistory];
+  
+  // Show that we're waiting for suggestions
   waitingForSuggestion = true;
   updateSuggestionPanel('Thinking...');
   
-  // Hole Vorschläge vom Hintergrund-Skript
+  // Get suggestions from the background script
   chrome.runtime.sendMessage({
     action: 'getSuggestions',
     message: message,
     chatHistory: chatHistory
   }, (response) => {
+    // Handle response as before
     debug('Received response from background script:', response);
     
     if (chrome.runtime.lastError) {
@@ -180,34 +185,92 @@ function processMessage(message, chatHistory) {
   });
 }
 
+function regenerateSuggestions() {
+  if (!lastMessage) {
+    debug('No message to regenerate suggestions for');
+    updateSuggestionPanel('No previous message found. Wait for a new fan message.');
+    return;
+  }
+  
+  if (waitingForSuggestion) {
+    debug('Already waiting for suggestions');
+    return;
+  }
+  
+  debug('Regenerating suggestions for message:', lastMessage);
+  
+  // Show regenerating state
+  waitingForSuggestion = true;
+  updateSuggestionPanel('Regenerating...');
+  
+  // Request new suggestions with higher temperature for more variety
+  chrome.runtime.sendMessage({
+    action: 'getSuggestions',
+    message: lastMessage,
+    chatHistory: lastChatHistory,
+    regenerate: true  // Flag to indicate this is a regeneration request
+  }, (response) => {
+    debug('Received regenerated response:', response);
+    
+    if (chrome.runtime.lastError) {
+      debug('Error from background script:', chrome.runtime.lastError);
+      updateSuggestionPanel('Error: ' + chrome.runtime.lastError.message);
+      waitingForSuggestion = false;
+      return;
+    }
+    
+    if (response && response.suggestions) {
+      displaySuggestions(response.suggestions);
+    } else if (response && response.error) {
+      updateSuggestionPanel('Error: ' + response.error);
+    } else {
+      updateSuggestionPanel('Error regenerating suggestions');
+    }
+    
+    waitingForSuggestion = false;
+  });
+}
+
 // Erstellt das Suggestion-Panel
 function createSuggestionPanel() {
-  // Wenn das Panel bereits existiert, nichts tun
+  // If the panel already exists, nothing to do
   if (suggestionPanel) return;
   
-  // Erstelle das Panel
+  // Create the panel
   suggestionPanel = document.createElement('div');
   suggestionPanel.className = 'fanfix-suggestion-panel';
   suggestionPanel.innerHTML = `
     <div class="suggestion-header">
       <span>💬 Response Suggestions</span>
-      <button class="close-btn">×</button>
+      <div class="header-buttons">
+        <button class="regenerate-btn" title="Get new suggestions">🔄</button>
+        <button class="close-btn">×</button>
+      </div>
     </div>
     <div class="suggestion-content">
       <p class="waiting-message">Waiting for fan messages...</p>
     </div>
   `;
   
-  // Füge es zum Dokument hinzu
+  // Add to document
   document.body.appendChild(suggestionPanel);
   
-  // Füge Event-Listener hinzu
+  // Add event listeners
   suggestionPanel.querySelector('.close-btn').addEventListener('click', () => {
     suggestionPanel.classList.toggle('minimized');
   });
   
+  // Add event listener for regenerate button
+  suggestionPanel.querySelector('.regenerate-btn').addEventListener('click', () => {
+    regenerateSuggestions();
+  });
+  
   debug('Suggestion panel created');
 }
+
+// Add a variable to store the latest message and chat history
+let lastMessage = '';
+let lastChatHistory = [];
 
 // Aktualisiert das Suggestion-Panel
 function updateSuggestionPanel(message) {
@@ -271,9 +334,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     checkForNewMessages();
     
     sendResponse({ status: 'refreshing' });
+    // Don't return true here since we're responding synchronously
   }
   
-  return true;
+  // Only return true if we need to respond asynchronously
+  return false;
 });
 
 // Initialisiere die Extension, sobald das Dokument bereit ist

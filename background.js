@@ -2,6 +2,9 @@
 
 // Enable debugging
 const debugMode = true;
+const controller = new AbortController();
+const timeoutId = setTimeout(() => controller.abort(), 25000); // 25-second timeout (less than Chrome's limit)
+
 
 function debug(message, obj = null) {
   if (!debugMode) return;
@@ -20,18 +23,12 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === 'getSuggestions') {
     debug('Getting suggestions for message:', request.message);
     debug('Chat history:', request.chatHistory);
+    debug('Is regenerate request:', !!request.regenerate);
     
-    getSuggestionsFromOpenAI(request.message, request.chatHistory)
+    getSuggestionsFromOpenAI(request.message, request.chatHistory, !!request.regenerate)
       .then(suggestions => {
         debug('Got suggestions:', suggestions);
         sendResponse({ suggestions });
-        
-        // After successfully generating suggestions, automatically store this conversation
-        // for future reference - only if we have both a message and at least one response
-        if (request.message && suggestions && suggestions.length > 0) {
-          // Store the first (best) suggestion as a high-quality response
-          storeConversation(request.message, suggestions[0]);
-        }
       })
       .catch(error => {
         debug('Error getting suggestions:', error);
@@ -206,35 +203,21 @@ function calculateCosineSimilarity(vecA, vecB) {
 
 // Store conversation for future reference
 async function storeConversation(fanMessage, creatorResponse) {
-  debug('Storing conversation for future reference');
+  debug('Storing conversation from import');
   
   try {
     // Generate embedding for the fan message
     const messageEmbedding = await getEmbedding(fanMessage);
     
-    // Get existing stored conversations
-    const data = await chrome.storage.local.get(['storedConversations']);
-    let storedConversations = data.storedConversations || [];
-    
-    // Add new conversation
-    storedConversations.push({
+    return {
       fanMessage,
       creatorResponse,
       embedding: messageEmbedding,
       timestamp: Date.now()
-    });
-    
-    // Limit to last 100 conversations to prevent storage issues
-    if (storedConversations.length > 100) {
-      storedConversations = storedConversations.slice(-100);
-    }
-    
-    // Store back to local storage
-    await chrome.storage.local.set({ storedConversations });
-    debug('Conversation stored successfully. Total conversations:', storedConversations.length);
+    };
   } catch (error) {
-    debug('Error storing conversation:', error);
-    // Don't throw here - this is a background operation that shouldn't interrupt the main flow
+    debug('Error creating conversation object:', error);
+    throw error;
   }
 }
 
@@ -276,8 +259,9 @@ async function findSimilarConversations(fanMessage) {
   }
 }
 
-async function getSuggestionsFromOpenAI(message, chatHistory) {
+async function getSuggestionsFromOpenAI(message, chatHistory, isRegenerate = false) {
   debug('Fetching suggestions from OpenAI using RAG');
+  debug('Is regenerate request:', isRegenerate);
   
   // Get API key and settings from storage
   const data = await chrome.storage.sync.get([
@@ -304,8 +288,13 @@ async function getSuggestionsFromOpenAI(message, chatHistory) {
     debug('Similar conversations found:', similarConversations.length);
     
     // Create base system prompt
-    let systemPrompt = 'You are a helpful assistant that generates engaging and personalized responses for FanFix chats. Create 3 different suggested responses that are authentic, conversational, and likely to keep the conversation going. Make the responses varied in tone and length.';
+    let systemPrompt = 'You are a helpful assistant that generates engaging and personalized responses for FanFix chats. Create 5 different suggested responses that are authentic, conversational, and likely to keep the conversation going. Make the responses varied in tone and length.';
     
+    // If this is a regenerate request, add instructions for more variety
+    if (isRegenerate) {
+      systemPrompt += '\n\nIMPORTANT: This is a regeneration request. Please provide completely different suggestions than before with varied approaches and tones.';
+    }
+
     // Add writing style instructions if available
     if (writingStyle && writingStyle.trim()) {
       systemPrompt += `\n\nIMPORTANT: Use the following writing style for all responses: ${writingStyle}`;
@@ -345,6 +334,8 @@ async function getSuggestionsFromOpenAI(message, chatHistory) {
     
     debug('Sending request to OpenAI with messages:', messages);
     
+    const temperature = isRegenerate ? 1.0 : 0.7;
+    
     // Make API request
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
@@ -355,10 +346,12 @@ async function getSuggestionsFromOpenAI(message, chatHistory) {
       body: JSON.stringify({
         model: modelName,
         messages: messages,
-        temperature: 0.7,
+        temperature: temperature,
         max_tokens: 300
       })
     });
+
+    clearTimeout(timeoutId);
     
     const responseStatus = response.status;
     debug('Response status:', responseStatus);
@@ -378,6 +371,7 @@ async function getSuggestionsFromOpenAI(message, chatHistory) {
     
     return suggestions;
   } catch (error) {
+    clearTimeout(timeoutId);
     debug('OpenAI API error:', error);
     throw error;
   }
