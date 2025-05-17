@@ -1,21 +1,24 @@
-/* styles.css - Styling for the suggestion panel */
+/* Updated styles.css with responsive height */
 
 .fanfix-suggestion-panel {
   position: fixed;
-  bottom: 80px;
+  bottom: 80px; /* Keep some space at the bottom for the chat input */
   right: 20px;
   width: 300px;
-  max-height: 400px;
+  max-height: calc(90vh - 100px); /* Use 90% of viewport height minus space for margins */
   background-color: white;
   border-radius: 8px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   z-index: 9999;
   overflow: hidden;
-  transition: height 0.3s ease;
+  transition: all 0.3s ease;
+  display: flex;
+  flex-direction: column;
 }
 
 .fanfix-suggestion-panel.minimized {
   height: 40px;
+  max-height: 40px;
 }
 
 .suggestion-header {
@@ -25,6 +28,7 @@
   padding: 10px 15px;
   background-color: #f0f0f0;
   border-bottom: 1px solid #ddd;
+  flex-shrink: 0; /* Prevent header from shrinking */
 }
 
 .close-btn {
@@ -37,8 +41,10 @@
 
 .suggestion-content {
   padding: 10px 15px;
-  max-height: 340px;
   overflow-y: auto;
+  flex-grow: 1; /* Allow content to grow and fill available space */
+  display: flex;
+  flex-direction: column;
 }
 
 .waiting-message {
@@ -54,6 +60,8 @@
   margin-bottom: 8px;
   cursor: pointer;
   transition: background-color 0.2s ease;
+  overflow-wrap: break-word; /* Ensure long text wraps properly */
+  word-break: break-word;
 }
 
 .suggestion-item:hover {
@@ -87,6 +95,7 @@
   border-radius: 4px;
   overflow: hidden;
   height: 8px;
+  flex-shrink: 0; /* Prevent from shrinking */
 }
 
 .progress-bar {
@@ -101,12 +110,14 @@
   font-size: 12px;
   color: #666;
   margin-top: 5px;
+  flex-shrink: 0; /* Prevent from shrinking */
 }
 
 .loading-animation {
   display: flex;
   justify-content: center;
   margin: 10px 0;
+  flex-shrink: 0; /* Prevent from shrinking */
 }
 
 .dot {
