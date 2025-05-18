@@ -33,13 +33,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       .then(suggestions => {
         debug('Got suggestions:', suggestions);
         sendResponse({ suggestions });
-        
-        // After successfully generating and sending the suggestions, 
-        // store the conversation for future reference if this is not a regenerate request
-        if (!request.regenerate && request.chatHistory && request.chatHistory.length > 0) {
-          storeNewConversation(request.message, suggestions)
-            .catch(err => debug('Error storing conversation:', err));
-        }
       })
       .catch(error => {
         debug('Error getting suggestions:', error);
@@ -462,7 +455,7 @@ instructions += `# Instructions
     const formattedInput = [];
     formattedInput.push({
           role: "system",
-          content: "output answers in the JSON format given in the instructions"
+          content: `Create ${numSuggestions} different suggested responses to the fan's message in the given JSON format.`
         });
     
     // Add chat history to the input
@@ -527,9 +520,22 @@ instructions += `# Instructions
     // Parse the response from the Responses API
     const data = await response.json();
     debug('API response data:', data);
-    
+
     // Extract content from the Responses API format
-    const content = data.content || '';
+    let content = '';
+    if (data.output && 
+        Array.isArray(data.output) && 
+        data.output[0]?.content && 
+        Array.isArray(data.output[0].content) &&
+        data.output[0].content[0]?.text) {
+        
+        content = data.output[0].content[0].text.trim();
+    } else if (data.content) {
+        // Fallback to old format if available
+        content = data.content;
+    }
+
+    debug('Extracted content:', content);
     
     // Parse the suggestions from the response
     const suggestions = parseResponses(content, numSuggestions);
@@ -559,7 +565,28 @@ function parseResponses(content, requestedCount = 3) {
   let suggestions = [];
   
   try {
-    // Try to parse as JSON
+    // First check if the content is a JSON string wrapped in quotes
+    if (typeof content === 'string' && content.trim().startsWith('"') && content.trim().endsWith('"')) {
+      // Remove outer quotes and unescape inner quotes
+      const unescapedContent = JSON.parse(content);
+      
+      // Now parse the inner JSON
+      if (typeof unescapedContent === 'string') {
+        const jsonResponse = JSON.parse(unescapedContent);
+        
+        if (jsonResponse.suggestions && Array.isArray(jsonResponse.suggestions)) {
+          suggestions = jsonResponse.suggestions
+            .filter(s => s && (s.type === 'single' || s.type === 'multi'))
+            .filter(s => Array.isArray(s.messages) && s.messages.length > 0)
+            .slice(0, requestedCount);
+          
+          debug('Successfully parsed double-encoded JSON suggestions:', suggestions.length);
+          return suggestions; // Return early since we've successfully parsed
+        }
+      }
+    }
+    
+    // Try standard JSON parsing as before
     const jsonResponse = JSON.parse(content);
     
     // Check if the response has a suggestions array
