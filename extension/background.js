@@ -443,26 +443,19 @@ Return ONLY valid JSON following this structure:
   ]
 }
 \`\`\``;
-// Add similar past conversations as examples
-    if (similarConversations.length > 0) {
-      instructions += `\n\n# Examples\n`;
-      
-      similarConversations.forEach((convo, index) => {
-        instructions += `\n<user_query id="example-${index + 1}">\n${convo.fanMessage}\n</user_query>\n`;
-        
-        // Handle multi-message responses
-        if (convo.creatorResponses && convo.creatorResponses.length > 0) {
-          instructions += `\n<assistant_response id="example-${index + 1}">\n`;
-          instructions += `{[\n    {\n      "type": "${convo.creatorResponses.length > 1 ? 'multi' : 'single'}",\n      "messages": [`;
-          
-          convo.creatorResponses.forEach((response, respIndex) => {
-            instructions += `\n        "${response.replace(/"/g, '\\"')}"${respIndex < convo.creatorResponses.length - 1 ? ',' : ''}`;
-          });
-          
-          instructions += `\n      ]\n    }\n  ]\n}\n</assistant_response>\n`;
-        }
-      });
-    }
+// Add any examples from similar conversations here
+if (similarConversations.length > 0) {
+  similarConversations.forEach((convo, index) => {
+    instructions += `
+## Example ${index + 1}
+### Fan Message
+"${convo.fanMessage}"
+
+### Creator Response
+${convo.creatorResponses.map(msg => `"${msg}"`).join('\n')}
+`;
+  });
+}
 
 instructions += `
 # Final Instructions
