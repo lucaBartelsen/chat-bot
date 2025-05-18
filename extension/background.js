@@ -396,12 +396,22 @@ async function getSuggestionsFromOpenAI(message, chatHistory, isRegenerate = fal
     const similarConversations = await findSimilarConversations(message);
     debug('Similar conversations found:', similarConversations.length);
     
-    // Create base system prompt with multi-message support
-    let systemPrompt = `You are a helpful assistant that generates engaging and personalized responses for FanFix chats. 
+    // Build the system prompt for the Responses API following the new format
+    let instructions = `# Identity
 
-Create ${numSuggestions} different suggested responses. Each suggestion can be either a single message or a multi message with sequence of 2-3 connected messages that would be sent in sequence.
+You are an assistant that generates engaging and personalized responses for social media fans on FanFix platform.`;
 
-Return your suggestions in this exact JSON format:
+// Add writing style instructions if available in the Identity section
+    if (writingStyle && writingStyle.trim()) {
+      instructions += `\nYou write in this style: ${writingStyle}`;
+    }
+
+instructions += `# Instructions
+
+* Create ${numSuggestions} different suggested responses to the fan's message.
+* Each suggestion can be either a single message or a multi-message with 2-3 connected messages.
+* Format your response as valid JSON that follows this exact structure:
+\`\`\`
 {
   "suggestions": [
     {
@@ -411,84 +421,98 @@ Return your suggestions in this exact JSON format:
     {
       "type": "multi",
       "messages": ["First message in sequence", "Second follow-up message", "Optional third message"]
-    },
-    // Additional suggestions...
+    }
   ]
 }
-
-Prefer multi-message but if the reply is very short you can do single-message suggestions. For multi-message suggestions, make sure each message in the sequence flows naturally from one to the next, as if in a real conversation.`;
+\`\`\`
+* Prefer multi-message but use single-message for very short replies.
+* For multi-message suggestions, ensure each message flows naturally from one to the next.
+* Include emojis, casual language, and occasional flirty content when appropriate.
+* ONLY return the JSON with no additional text or explanations.`;
     
     // If this is a regenerate request, add instructions for more variety
     if (isRegenerate) {
-      systemPrompt += `\n\nIMPORTANT: This is a regeneration request. Please provide ${numSuggestions} completely different suggestions than before with varied approaches and tones.`;
+      instructions += `\n* This is a regeneration request - provide completely different suggestions than before with varied approaches and tones.`;
     }
     
-    // Add writing style instructions if available
-    if (writingStyle && writingStyle.trim()) {
-      systemPrompt += `\n\nIMPORTANT: Use the following writing style for all responses: ${writingStyle}`;
-    }
-    
-    // Add similar past conversations as examples if available
+    // Add similar past conversations as examples
     if (similarConversations.length > 0) {
-      systemPrompt += '\n\nHere are examples of previous similar conversations that worked well:';
+      instructions += `\n\n# Examples\n`;
       
       similarConversations.forEach((convo, index) => {
-        systemPrompt += `\n\nExample ${index + 1}:`;
-        systemPrompt += `\nFan: "${convo.fanMessage}"`;
+        instructions += `\n<user_query id="example-${index + 1}">\n${convo.fanMessage}\n</user_query>\n`;
         
         // Handle multi-message responses
         if (convo.creatorResponses && convo.creatorResponses.length > 0) {
-          systemPrompt += `\nYou:`;
+          instructions += `\n<assistant_response id="example-${index + 1}">\n`;
+          instructions += `{[\n    {\n      "type": "${convo.creatorResponses.length > 1 ? 'multi' : 'single'}",\n      "messages": [`;
+          
           convo.creatorResponses.forEach((response, respIndex) => {
-            systemPrompt += `\n  Message ${respIndex + 1}: "${response}"`;
+            instructions += `\n        "${response.replace(/"/g, '\\"')}"${respIndex < convo.creatorResponses.length - 1 ? ',' : ''}`;
           });
-        } else {
-          // Fallback for old format or missing responses
-          systemPrompt += `\nYou: "(No response recorded)"`;
+          
+          instructions += `\n      ]\n    }\n  ]\n}\n</assistant_response>\n`;
         }
       });
-      
-      systemPrompt += '\n\nUse these examples as inspiration for tone, style AND content. You can reuse similar content elements, successful phrases, and themes from the example responses and adapt them to the current context when appropriate.';
     }
     
-    // Prepare the messages for OpenAI API
-    const messages = [
-      {
-        role: 'system',
-        content: systemPrompt
-      }
-    ];
+    debug('Using system prompt:', instructions);
     
-    // Add chat history for context
+    // Format the chat history in the correct input structure for the Responses API
+    const formattedInput = [];
+    formattedInput.push({
+          role: "system",
+          content: "output answers in the JSON format given in the instructions"
+        });
+    
+    // Add chat history to the input
     if (chatHistory && chatHistory.length > 0) {
-      messages.push(...chatHistory);
+      for (const entry of chatHistory) {
+        formattedInput.push({
+          role: entry.role,
+          content: entry.content
+        });
+      }
     }
     
     // Add the latest message to respond to
-    messages.push({
-      role: 'user',
-      content: `Please suggest ${numSuggestions} different responses to this message: "${message}"`
+    formattedInput.push({
+      role: "user",
+      content: message
     });
     
-    debug('Sending request to OpenAI with messages:', messages);
+    debug('Formatted input with chat history:', formattedInput);
     
-    // Adjust temperature based on whether this is a regenerate request
-    const temperature = isRegenerate ? 1.0 : 0.7;
+    debug('Preparing request for OpenAI Responses API');
     
-    // Make API request with JSON response format
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    // Use a lower temperature for more consistent adherence to the prompt format
+    // Base temperature is lower to ensure format compliance, but still allow for some variety
+    const baseTemperature = 0.4;
+    // If regenerate is requested, add a small increment for more variety
+    const temperature = isRegenerate ? baseTemperature + 0.3 : baseTemperature;
+    
+    // Prepare the payload for the Responses API
+    const requestPayload = {
+      model: modelName,
+      instructions,
+      input: formattedInput,
+      temperature: temperature,
+      max_output_tokens: 600,
+      user: "fanfix-extension-user",
+      text: { format: { type: "json_object" } }
+    };
+    
+    debug('Sending request to OpenAI Responses API:', requestPayload);
+    
+    // Make API request using the new Responses API
+    const response = await fetch('https://api.openai.com/v1/responses', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
+        'Authorization': `Bearer ${apiKey}`,
+        'OpenAI-Beta': 'responses=v1'  // Required header for Responses API
       },
-      body: JSON.stringify({
-        model: modelName,
-        messages: messages,
-        temperature: temperature,
-        max_tokens: 600, // Increased to accommodate more multi-message suggestions
-        response_format: { type: "json_object" } // Request JSON response
-      })
+      body: JSON.stringify(requestPayload)
     });
     
     const responseStatus = response.status;
@@ -497,14 +521,17 @@ Prefer multi-message but if the reply is very short you can do single-message su
     if (!response.ok) {
       const errorData = await response.json();
       debug('API error response:', errorData);
-      throw new Error(errorData.error?.message || `Error calling OpenAI API: ${responseStatus}`);
+      throw new Error(errorData.error?.message || `Error calling OpenAI Responses API: ${responseStatus}`);
     }
     
+    // Parse the response from the Responses API
     const data = await response.json();
     debug('API response data:', data);
     
+    // Extract content from the Responses API format
+    const content = data.content || '';
+    
     // Parse the suggestions from the response
-    const content = data.choices[0].message.content;
     const suggestions = parseResponses(content, numSuggestions);
     
     function ensureMultiMessageFormat(suggestions) {
@@ -520,7 +547,7 @@ Prefer multi-message but if the reply is very short you can do single-message su
       });
     }
     
-    return ensureMultiMessageFormat(suggestions);;
+    return ensureMultiMessageFormat(suggestions);
   } catch (error) {
     debug('OpenAI API error:', error);
     throw error;
